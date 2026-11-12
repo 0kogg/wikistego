@@ -160,6 +160,9 @@ small, hard-to-copy file to hand out — not as a security boundary.
 `extension/` is a Manifest V3 add-on for Chrome/Chromium and Firefox that reveals **plain**
 payloads automatically.
 
+**Download:** [wikistego-extension.zip](https://github.com/0kogg/wikistego/releases/latest/download/wikistego-extension.zip)
+(latest release) — or use the `extension/` folder directly.
+
 * It runs on http(s) pages but exits immediately unless the document is MediaWiki (meta
   generator, `body.mediawiki`, or `mw.config`).
 * On article views it asks the same origin for that page's `?action=raw` wikitext, decodes plain

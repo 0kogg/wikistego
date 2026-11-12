@@ -19,7 +19,10 @@
  straight from your browser to the wiki you named — no third party, no relay.</p></div></details><details class="faq"><summary>is there a browser extension?</summary><div class="a"><p>Yes — a Manifest V3 add-on for Chrome and Firefox that reveals <em>plain</em> payloads
  automatically on MediaWiki article pages. It asks the same wiki for the page's
  <code>?action=raw</code> wikitext, decodes it locally and shows the result in a small
- panel. Encrypted payloads are counted but never guessed at. No storage, no telemetry.</p></div></details><details class="faq"><summary>how much does it add to the page?</summary><div class="a"><p>1 byte of message = 8 zero-width characters = 24 bytes of page. A 60-character
+ panel. Encrypted payloads are counted but never guessed at. No storage, no telemetry.</p><p><a href="https://github.com/0kogg/wikistego/releases/latest/download/wikistego-extension.zip">download the extension</a>
+ · <a href="https://github.com/0kogg/wikistego/tree/main/extension">source</a> — unzip, then
+ load unpacked in <code>chrome://extensions</code> or as a temporary add-on in
+ <code>about:debugging</code>.</p></div></details><details class="faq"><summary>how much does it add to the page?</summary><div class="a"><p>1 byte of message = 8 zero-width characters = 24 bytes of page. A 60-character
  message is about 2 KB. Page history shows the growth even though the diff looks empty.</p></div></details><details class="faq"><summary>is it really hidden?</summary><div class="a"><p>From readers, yes. From anyone who opens the raw wikitext, no. Encryption is the only
  thing that makes the content secret; without it, anyone who knows the format can decode
  the message.</p></div></details><details class="faq"><summary>what does the password protect?</summary><div class="a"><p>Everything. PBKDF2-SHA256 at 600,000 iterations derives an AES-256-GCM key; the salt,
