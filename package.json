@@ -4,6 +4,7 @@
   "private": true,
   "description": "Hide plain or encrypted messages in MediaWiki pages with zero-width characters",
   "author": "0kogg",
+  "license": "MIT",
   "repository": {
     "type": "git",
     "url": "https://github.com/0kogg/wikistego.git"

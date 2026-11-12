@@ -244,3 +244,7 @@ node tests/extension.js  # 18 checks: extension manifest + content-script flow
 `tests/run.js` needs no dependencies. The other four use jsdom to exercise the actual
 encode → place → decode flow, including the wrong-password, stripped-delimiter,
 page-URL-parsing and extension-panel paths. `npm test` runs all five in order (100 checks).
+
+## License
+
+MIT — see [LICENSE](LICENSE).
