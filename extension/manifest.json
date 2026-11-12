@@ -1,0 +1,38 @@
+{
+  "manifest_version": 3,
+  "name": "WikiStego — auto decoder",
+  "short_name": "WikiStego",
+  "version": "1.0.0",
+  "description": "Reveals plain WikiStego messages hidden in MediaWiki pages. Nothing is stored or sent anywhere.",
+  "homepage_url": "https://wikistego.pages.dev/",
+  "icons": {
+    "16": "icons/icon16.png",
+    "32": "icons/icon32.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  },
+  "action": {
+    "default_title": "WikiStego",
+    "default_popup": "popup.html",
+    "default_icon": {
+      "16": "icons/icon16.png",
+      "32": "icons/icon32.png"
+    }
+  },
+  "content_scripts": [
+    {
+      "matches": ["*://*/*"],
+      "js": ["decoder.js", "content.js"],
+      "css": ["panel.css"],
+      "run_at": "document_idle",
+      "all_frames": false
+    }
+  ],
+  "minimum_chrome_version": "102",
+  "browser_specific_settings": {
+    "gecko": {
+      "id": "wikistego@okogg.dev",
+      "strict_min_version": "115.0"
+    }
+  }
+}

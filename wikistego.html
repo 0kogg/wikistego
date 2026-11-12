@@ -1,0 +1,1506 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>WikiStego</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230c1120'/%3E%3Ccircle cx='16' cy='16' r='5' fill='%237c9cff'/%3E%3C/svg%3E">
+<style>
+:root {
+  --bg:#eef1f8; --surface:#ffffff; --surface2:#e9ecf6; --border:#d5dbeb;
+  --accent:#4c5fd5; --accent-d:#bcc3ef; --accent-text:#ffffff;
+  --ok:#14915f; --err:#c8303f; --warn:#9a5c00;
+  --text:#171a2b; --muted:#545e7a; --dim:#949db9;
+  --glow1:rgba(76,95,213,.16); --glow2:rgba(20,145,95,.10);
+  --shadow:0 24px 60px -34px rgba(23,26,43,.40);
+  --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+  --sans: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme]) {
+    --bg:#070a12; --surface:#0c1120; --surface2:#121a2c; --border:#1e2840;
+    --accent:#7c9cff; --accent-d:#2c3a63; --accent-text:#ffffff;
+    --ok:#3fcf9a; --err:#f46d8b; --warn:#e0a94f;
+    --text:#dce4f8; --muted:#7f8cae; --dim:#4d5878;
+    --glow1:rgba(124,156,255,.18); --glow2:rgba(63,207,154,.10);
+    --shadow:0 34px 80px -46px rgba(0,0,0,.95);
+  }
+}
+:root[data-theme="midnight"] {
+  --bg:#070a12; --surface:#0c1120; --surface2:#121a2c; --border:#1e2840;
+  --accent:#7c9cff; --accent-d:#2c3a63; --accent-text:#ffffff;
+  --ok:#3fcf9a; --err:#f46d8b; --warn:#e0a94f;
+  --text:#dce4f8; --muted:#7f8cae; --dim:#4d5878;
+  --glow1:rgba(124,156,255,.18); --glow2:rgba(63,207,154,.10);
+  --shadow:0 34px 80px -46px rgba(0,0,0,.95);
+}
+:root[data-theme="gotham"] {
+  --bg:#050506; --surface:#0a0a0c; --surface2:#111114; --border:#232329;
+  --accent:#d3a33c; --accent-d:#4a3a14; --accent-text:#161208;
+  --ok:#5fbf8b; --err:#d96a6a; --warn:#d3a33c;
+  --text:#e9e5db; --muted:#918c80; --dim:#5a564e;
+  --glow1:rgba(211,163,60,.14); --glow2:rgba(120,124,140,.10);
+  --shadow:0 34px 80px -46px rgba(0,0,0,.98);
+}
+
+*,*::before,*::after { box-sizing:border-box; margin:0; padding:0 }
+html { -webkit-text-size-adjust:100% }
+body {
+  background:var(--bg); color:var(--text);
+  font-family:var(--sans); font-size:13.5px; line-height:1.55;
+  min-height:100vh; display:flex; align-items:flex-start; justify-content:center;
+  padding:24px 14px calc(24px + env(safe-area-inset-bottom,0px));
+  overflow-x:hidden;
+}
+body::before, body::after {
+  content:''; position:fixed; z-index:0; border-radius:50%;
+  filter:blur(80px); pointer-events:none; will-change:transform;
+}
+body::before { width:480px;height:480px;top:-190px;left:-150px;background:var(--glow1);animation:drift1 24s ease-in-out infinite }
+body::after  { width:420px;height:420px;bottom:-200px;right:-130px;background:var(--glow2);animation:drift2 28s ease-in-out infinite }
+@keyframes drift1 { 0%,100%{transform:translate3d(0,0,0) scale(1)} 50%{transform:translate3d(50px,36px,0) scale(1.1)} }
+@keyframes drift2 { 0%,100%{transform:translate3d(0,0,0) scale(1)} 50%{transform:translate3d(-44px,-30px,0) scale(1.07)} }
+
+.shell {
+  position:relative; z-index:1; width:100%; max-width:540px;
+  background:var(--surface); border:1px solid var(--border); border-radius:10px;
+  padding:18px 18px 15px; box-shadow:var(--shadow);
+  animation:shellIn .42s cubic-bezier(.2,.7,.2,1);
+}
+@keyframes shellIn { from{opacity:0;transform:translateY(8px)} to{opacity:1;transform:none} }
+
+/* header */
+.hdr { display:flex; align-items:flex-start; justify-content:space-between; gap:10px; margin-bottom:14px }
+.hdr-name { font-family:var(--mono);font-size:16px;font-weight:600;letter-spacing:-.02em;display:flex;align-items:center;gap:9px }
+.pip { position:relative;width:7px;height:7px;border-radius:50%;background:var(--accent);flex-shrink:0 }
+.pip::after { content:'';position:absolute;inset:-5px;border-radius:50%;border:1px solid var(--accent);opacity:0;animation:ping 3s ease-out infinite }
+@keyframes ping { 0%{transform:scale(.55);opacity:.7} 70%,100%{transform:scale(1.7);opacity:0} }
+.hdr-sub { font-size:11px;color:var(--muted);margin-top:3px;padding-left:16px }
+.hdr-tools { display:flex;align-items:center;gap:6px;flex-wrap:wrap;justify-content:flex-end }
+.local {
+  display:inline-flex;align-items:center;gap:6px;white-space:nowrap;
+  font-family:var(--mono);font-size:9.5px;letter-spacing:.03em;color:var(--muted);
+  border:1px solid var(--border);border-radius:99px;padding:3px 9px;background:var(--surface2);
+}
+.local .dot { width:5px;height:5px;border-radius:50%;background:var(--ok);animation:beat 2.6s ease-in-out infinite }
+@keyframes beat { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:.4;transform:scale(.75)} }
+.theme {
+  width:auto;font-family:var(--mono);font-size:9.5px;color:var(--muted);
+  background:var(--surface2);border:1px solid var(--border);border-radius:99px;
+  padding:3px 8px;cursor:pointer;letter-spacing:.03em;
+}
+.theme:hover { color:var(--text) }
+
+/* tabs */
+.tabs { display:flex;gap:0;border-bottom:1px solid var(--border);margin-bottom:15px;overflow-x:auto;scrollbar-width:none }
+.tabs::-webkit-scrollbar { display:none }
+.tab {
+  position:relative;font-family:var(--mono);font-size:11.5px;font-weight:500;
+  color:var(--muted);padding:8px 13px;cursor:pointer;white-space:nowrap;
+  border:none;background:none;user-select:none;transition:color .18s ease
+}
+.tab::after {
+  content:'';position:absolute;left:13px;right:13px;bottom:-1px;height:2px;
+  background:var(--accent);border-radius:2px;transform:scaleX(0);transform-origin:center;
+  transition:transform .24s cubic-bezier(.2,.7,.2,1)
+}
+.tab:hover { color:var(--text) }
+.tab.on { color:var(--accent) }
+.tab.on::after { transform:scaleX(1) }
+
+/* panels */
+.panel { display:none }
+.panel.on { display:block;animation:panelIn .26s cubic-bezier(.2,.7,.2,1) }
+@keyframes panelIn { from{opacity:0;transform:translateY(6px)} to{opacity:1;transform:none} }
+
+/* fields */
+.field { margin-bottom:10px }
+label { display:block;font-family:var(--mono);font-size:10px;font-weight:500;color:var(--muted);margin-bottom:5px;letter-spacing:.03em }
+textarea,input[type=password],input[type=text],select {
+  width:100%;background:var(--surface2);border:1px solid var(--border);
+  border-radius:4px;color:var(--text);font-size:13px;line-height:1.5;
+  padding:8px 10px;outline:none;
+  transition:border-color .18s ease,box-shadow .18s ease,background .18s ease;
+  font-family:var(--sans)
+}
+textarea { resize:vertical;min-height:74px }
+textarea.mono,input[type=password],input[type=text],select { font-family:var(--mono);font-size:11.5px }
+textarea:focus,input:focus,select:focus { border-color:var(--accent);background:var(--surface);box-shadow:0 0 0 3px var(--glow1) }
+textarea::placeholder,input::placeholder { color:var(--dim) }
+
+.chk { display:flex;align-items:center;gap:7px;cursor:pointer;user-select:none;font-family:var(--mono);font-size:10.5px;color:var(--muted);transition:color .18s }
+.chk:hover { color:var(--text) }
+.chk input { width:13px;height:13px;accent-color:var(--accent);flex-shrink:0;cursor:pointer }
+
+.grid2 { display:grid;grid-template-columns:1fr 1fr;gap:8px }
+.inline { display:flex;gap:7px }
+.inline input { flex:1;min-width:0 }
+.inline .btn { white-space:nowrap }
+
+.pw { position:relative }
+.pw input { padding-right:50px }
+.eye {
+  position:absolute;right:4px;bottom:4px;font-family:var(--mono);font-size:9px;
+  letter-spacing:.04em;color:var(--dim);background:none;border:none;cursor:pointer;
+  padding:4px 6px;border-radius:3px;transition:color .15s
+}
+.eye:hover { color:var(--accent) }
+
+.counter { font-family:var(--mono);font-size:9.5px;color:var(--dim);margin-top:4px;text-align:right }
+
+/* buttons */
+.row { display:flex;gap:7px;margin-top:11px;flex-wrap:wrap }
+.btn { font-family:var(--mono);font-size:11.5px;font-weight:500;padding:8px 15px;border:none;border-radius:4px;cursor:pointer;transition:transform .12s ease,box-shadow .2s ease,opacity .15s,color .15s,border-color .15s }
+.btn-p { background:var(--accent);color:var(--accent-text) }
+.btn-p:hover { opacity:.9;transform:translateY(-1px);box-shadow:0 7px 18px -10px var(--accent) }
+.btn-s { background:var(--surface2);color:var(--muted);border:1px solid var(--border) }
+.btn-s:hover { color:var(--text);border-color:var(--dim) }
+.btn:active { transform:translateY(0) scale(.98) }
+.btn:disabled { opacity:.45;cursor:not-allowed }
+.btn-cp { font-family:var(--mono);font-size:10.5px;font-weight:500;padding:5px 11px;background:var(--surface2);border:1px solid var(--border);border-radius:4px;color:var(--muted);cursor:pointer;position:relative;z-index:1;white-space:nowrap;transition:color .15s,border-color .15s,transform .12s }
+.btn-cp:hover { color:var(--text);border-color:var(--accent) }
+.btn-cp.ok { color:var(--ok);border-color:var(--ok);animation:pop .3s ease }
+@keyframes pop { 0%{transform:scale(.94)} 60%{transform:scale(1.04)} 100%{transform:scale(1)} }
+
+/* output */
+.out { margin-top:14px;display:none }
+.out.on { display:block;animation:panelIn .24s ease }
+.out-lbl { font-family:var(--mono);font-size:10px;color:var(--muted);margin-bottom:7px;letter-spacing:.02em }
+.pbox { background:var(--surface2);border:1px dashed var(--border);border-radius:4px;padding:11px 13px;display:flex;align-items:center;justify-content:space-between;gap:10px;position:relative;overflow:hidden }
+.pbox::before { content:'';position:absolute;inset:0;background:linear-gradient(90deg,transparent,var(--accent-d),transparent);opacity:.28;animation:shim 3.4s ease-in-out infinite;pointer-events:none }
+@keyframes shim { 0%,100%{transform:translateX(-110%)} 50%{transform:translateX(110%)} }
+.pinfo { font-family:var(--mono);font-size:11px;color:var(--muted);position:relative;z-index:1 }
+.pinfo .n { color:var(--accent);font-weight:600 }
+
+.note { font-family:var(--mono);font-size:10px;color:var(--dim);margin-top:9px;padding-left:10px;border-left:2px solid var(--border);line-height:1.75 }
+.note em { color:var(--muted);font-style:normal }
+.hint { font-family:var(--mono);font-size:10px;color:var(--dim);margin-top:5px;line-height:1.65 }
+.hint code { color:var(--muted) }
+
+.revealed { background:var(--surface2);border:1px solid var(--ok);border-radius:4px;padding:11px 13px;font-family:var(--mono);font-size:12.5px;color:var(--text);word-break:break-word;white-space:pre-wrap;line-height:1.55;animation:revealIn .34s cubic-bezier(.2,.7,.2,1) }
+@keyframes revealIn { from{opacity:0;transform:scale(.97);box-shadow:0 0 0 6px var(--glow2)} to{opacity:1;transform:none;box-shadow:0 0 0 0 transparent} }
+.revealed::before { content:'→  ';color:var(--ok);font-weight:600 }
+
+.errmsg { font-family:var(--mono);font-size:11px;color:var(--err);padding:8px 10px;background:var(--surface2);border:1px solid var(--err);border-radius:4px;margin-top:10px;line-height:1.6;animation:panelIn .2s ease }
+.errmsg::before { content:'✕  ' }
+.banner { font-family:var(--mono);font-size:10.5px;line-height:1.6;color:var(--warn);border:1px solid var(--warn);border-radius:4px;padding:8px 10px;margin-bottom:12px;display:none }
+.banner.on { display:block;animation:panelIn .2s ease }
+
+.badge { font-family:var(--mono);font-size:9px;padding:2px 6px;border-radius:99px;border:1px solid var(--border);color:var(--muted);text-transform:uppercase;letter-spacing:.07em;white-space:nowrap }
+.badge.enc { color:var(--accent);border-color:var(--accent-d);background:var(--surface2) }
+.badge.plain { color:var(--ok);border-color:var(--ok) }
+.badge.leg { color:var(--warn);border-color:var(--warn) }
+
+.item { border:1px solid var(--border);border-radius:5px;background:var(--surface2);padding:10px 12px;margin-bottom:8px;transition:border-color .18s ease,transform .18s ease;animation:panelIn .26s ease both }
+.item:hover { border-color:var(--dim);transform:translateY(-1px) }
+.item-head { display:flex;align-items:center;gap:7px;flex-wrap:wrap;margin-bottom:7px }
+.meta { font-family:var(--mono);font-size:9.5px;color:var(--dim) }
+.item-err { font-family:var(--mono);font-size:11px;color:var(--err);line-height:1.6 }
+.item-actions { display:flex;justify-content:flex-end;margin-top:7px }
+
+.slot { border:1px solid var(--border);border-left:3px solid var(--accent);background:var(--surface2);padding:9px 11px;margin-bottom:7px;border-radius:4px;animation:slotIn .3s cubic-bezier(.2,.7,.2,1) both;transition:border-color .18s ease,transform .18s ease }
+.slot:hover { border-color:var(--dim);transform:translateY(-1px) }
+@keyframes slotIn { from{opacity:0;transform:translateX(-6px)} to{opacity:1;transform:none} }
+.snip { font-family:var(--mono);font-size:11px;color:var(--text);word-break:break-word;white-space:pre-wrap;line-height:1.65 }
+.zwmark { color:var(--accent);background:var(--surface);padding:0 2px;font-weight:600;border-radius:2px }
+.slot .kv { font-family:var(--mono);font-size:9.5px;color:var(--dim);margin-top:5px }
+
+details.manual { margin-top:9px }
+details.manual summary { font-family:var(--mono);font-size:10px;color:var(--muted);cursor:pointer;transition:color .15s }
+details.manual summary:hover { color:var(--text) }
+details.manual textarea { margin-top:7px;min-height:64px }
+
+/* faq */
+details.faq { border-bottom:1px solid var(--border);padding:10px 0 }
+details.faq summary { cursor:pointer;list-style:none;user-select:none;display:flex;justify-content:space-between;align-items:center;gap:12px;font-family:var(--mono);font-size:11px;color:var(--text);transition:color .15s }
+details.faq summary::-webkit-details-marker { display:none }
+details.faq summary::after { content:'+';color:var(--dim);font-size:13px }
+details.faq[open] summary::after { content:'−' }
+details.faq summary:hover { color:var(--accent) }
+details.faq .a { font-size:12px;color:var(--muted);padding-top:8px;line-height:1.75;animation:panelIn .22s ease }
+details.faq .a p + p { margin-top:7px }
+.alph { width:100%;border-collapse:collapse;font-family:var(--mono);font-size:10.5px;margin:8px 0 4px }
+.alph td { padding:4px 7px;border-bottom:1px solid var(--border);color:var(--muted);vertical-align:top }
+.alph tr:last-child td { border-bottom:none }
+.alph td:first-child { color:var(--text);white-space:nowrap }
+.alph code { color:var(--accent) }
+.legal h3 { font-family:var(--mono);font-size:11px;color:var(--text);margin:18px 0 7px;letter-spacing:.02em }
+.legal p { font-size:12px;color:var(--muted);line-height:1.75;margin-bottom:7px }
+.legal .stamp { font-family:var(--mono);font-size:9.5px;color:var(--dim);margin-top:3px }
+
+/* footer + toast */
+.foot { margin-top:16px;padding-top:11px;border-top:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;font-family:var(--mono);font-size:9.5px;color:var(--dim);line-height:1.6 }
+.foot code { color:var(--muted) }
+.foot a { color:var(--muted);text-decoration:none;border-bottom:1px dotted var(--dim) }
+.foot a:hover { color:var(--accent);border-bottom-color:var(--accent) }
+.foot .foot-right { display:inline-flex;align-items:center;gap:8px;flex-wrap:wrap }
+.foot .gh { display:inline-flex;align-items:center;gap:4px;padding:2px 8px;border:1px solid var(--border);border-radius:99px;color:var(--muted);transition:color .15s,border-color .15s,background .15s }
+.foot .gh:hover { color:var(--accent);border-color:var(--accent);background:var(--surface2) }
+.toast { position:fixed;left:50%;bottom:22px;transform:translate(-50%,14px);opacity:0;pointer-events:none;background:var(--surface);border:1px solid var(--border);color:var(--text);font-family:var(--mono);font-size:10.5px;padding:8px 13px;border-radius:99px;box-shadow:0 10px 30px -12px rgba(0,0,0,.5);transition:opacity .2s,transform .2s;z-index:50 }
+.toast.on { opacity:1;transform:translate(-50%,0) }
+
+.drop-hover { outline:2px dashed var(--accent);outline-offset:-4px;background:var(--surface) }
+
+@media (max-width:560px) {
+  body { padding:0 }
+  .shell { max-width:100%;border-radius:0;border-left:none;border-right:none;padding:15px 13px calc(14px + env(safe-area-inset-bottom,0px)) }
+  .hdr { flex-direction:column;gap:9px }
+  .hdr-tools { justify-content:flex-start }
+  .tabs { justify-content:space-between }
+  .tab { flex:1;text-align:center;padding:9px 3px }
+  textarea,input[type=password],input[type=text],select { font-size:16px }
+  .row .btn { flex:1 }
+  .grid2 { grid-template-columns:1fr }
+  .foot { font-size:9px }
+}
+@media (prefers-reduced-motion: reduce) {
+  *,*::before,*::after { animation-duration:.001ms!important;animation-iteration-count:1!important;transition-duration:.001ms!important;scroll-behavior:auto!important }
+}
+</style>
+</head>
+<body>
+<div class="shell">
+  <div class="hdr">
+    <div>
+      <div class="hdr-name"><div class="pip"></div>wikistego</div>
+      <div class="hdr-sub">plain or encrypted text in mediawiki pages</div>
+    </div>
+    <div class="hdr-tools">
+      <span class="local"><span class="dot"></span>local · no tracking</span>
+      <select id="theme" class="theme" onchange="WS.setTheme(this.value)" title="theme">
+        <option value="auto">auto</option>
+        <option value="light">light</option>
+        <option value="midnight">midnight</option>
+        <option value="gotham">gotham</option>
+      </select>
+    </div>
+  </div>
+
+  <div id="crypto-warn" class="banner"></div>
+
+  <div class="tabs">
+    <button class="tab on" onclick="WS.tab('encode',this)">encode</button>
+    <button class="tab"    onclick="WS.tab('decode',this)">decode</button>
+    <button class="tab"    onclick="WS.tab('place',this)">place</button>
+    <button class="tab"    onclick="WS.tab('faq',this)">faq</button>
+  </div>
+
+  <!-- ══════════════════ ENCODE ══════════════════ -->
+  <div id="p-encode" class="panel on">
+    <div class="field">
+      <label>message to hide</label>
+      <textarea id="e-msg" placeholder="type the secret message…" spellcheck="false"></textarea>
+      <div class="counter" id="e-count">0 chars · +0 B on page</div>
+    </div>
+
+    <div class="field">
+      <label class="chk"><input type="checkbox" id="e-enc" checked onchange="WS.updateMode()">
+        encrypt with password</label>
+    </div>
+
+    <div id="e-pw-wrap">
+      <div class="grid2">
+        <div class="field pw">
+          <label>password</label>
+          <input id="e-pw" type="password" placeholder="shared secret">
+          <button type="button" class="eye" onclick="WS.togglePw('e-pw',this)">show</button>
+        </div>
+        <div class="field pw">
+          <label>repeat</label>
+          <input id="e-pw2" type="password" placeholder="catch typos">
+          <button type="button" class="eye" onclick="WS.togglePw('e-pw2',this)">show</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="e-whiten-wrap" class="field" style="display:none">
+      <label class="chk"><input type="checkbox" id="e-whiten">
+        whiten bits — obfuscation only, not encryption</label>
+    </div>
+
+    <div class="field">
+      <label>alphabet</label>
+      <select id="e-alph">
+        <option value="0" selected>U+200B / U+200C — default</option>
+        <option value="1">U+200B / U+200D — joiner variant</option>
+        <option value="2">U+200C / U+200D — no zero-width space</option>
+      </select>
+    </div>
+
+    <div class="row">
+      <button class="btn btn-p" onclick="WS.doEncode()">encode →</button>
+      <button class="btn btn-s" onclick="WS.clrE()">clear</button>
+    </div>
+
+    <div id="e-err" class="errmsg" style="display:none"></div>
+
+    <div id="e-out" class="out">
+      <div class="out-lbl">invisible payload — ready to paste</div>
+      <div class="pbox">
+        <div class="pinfo">
+          <span class="n" id="e-bytes">0</span> payload bytes
+          &nbsp;·&nbsp; <span class="n" id="e-chars">0</span> zwc chars
+          &nbsp;·&nbsp; <span id="e-size">+0 KB</span>
+        </div>
+        <button id="btn-cp" class="btn-cp" onclick="WS.copyPL()">copy</button>
+      </div>
+      <div id="e-test" class="hint" style="margin-top:9px"></div>
+      <div class="note">
+        <em>→</em> edit source, not the visual editor<br>
+        <em>→</em> use <em>place</em> — it returns the whole patched page
+      </div>
+      <details class="manual">
+        <summary>manual copy</summary>
+        <textarea id="e-manual" class="mono" readonly spellcheck="false"></textarea>
+        <div class="row"><button class="btn btn-s" onclick="WS.selectManual('e-manual')">select all</button></div>
+      </details>
+    </div>
+  </div>
+
+  <!-- ══════════════════ DECODE ══════════════════ -->
+  <div id="p-decode" class="panel">
+    <div class="field">
+      <label>wikitext source</label>
+      <textarea id="d-wiki" class="mono" placeholder="paste the page source — not the rendered page" spellcheck="false" style="min-height:140px"></textarea>
+      <div class="hint" id="d-drop">or drop a .wiki / .txt file here</div>
+    </div>
+
+    <div class="field">
+      <label>import a page</label>
+      <div class="inline">
+        <input id="d-page" type="text" placeholder="https://en.wikipedia.org/wiki/Page">
+        <button class="btn btn-s" onclick="WS.importPage()">import</button>
+      </div>
+      <div class="hint" id="d-import-note">fetches that page's wikitext straight from the wiki</div>
+    </div>
+
+    <div class="field pw">
+      <label>password — only for encrypted</label>
+      <input id="d-pw" type="password" placeholder="leave empty for plain">
+      <button type="button" class="eye" onclick="WS.togglePw('d-pw',this)">show</button>
+    </div>
+
+    <div class="row">
+      <button class="btn btn-p" onclick="WS.doDecode()">decode →</button>
+      <button class="btn btn-s" onclick="WS.clrD()">clear</button>
+    </div>
+
+    <div id="d-err" class="errmsg" style="display:none"></div>
+    <div id="d-out" class="out"></div>
+  </div>
+
+  <!-- ══════════════════ PLACE ══════════════════ -->
+  <div id="p-place" class="panel">
+    <div id="pl-payload" class="hint" style="margin-bottom:12px"></div>
+
+    <div class="field">
+      <label>destination wikitext</label>
+      <textarea id="pl-wiki" class="mono" placeholder="paste the page you are going to edit" spellcheck="false" style="min-height:140px"></textarea>
+    </div>
+
+    <div class="row">
+      <button class="btn btn-p" onclick="WS.findSlots()">find safe slots</button>
+      <button class="btn btn-s" onclick="WS.plClear()">clear</button>
+    </div>
+
+    <div id="pl-err" class="errmsg" style="display:none"></div>
+    <div id="pl-out" class="out"></div>
+  </div>
+
+  <!-- ══════════════════ FAQ ══════════════════ -->
+  <div id="p-faq" class="panel">
+
+    <details class="faq" open>
+      <summary>what does this actually do?</summary>
+      <div class="a">
+        <p>It turns a message into zero-width Unicode characters and wraps them in a checksummed
+        frame. Pasted into wikitext, the page renders exactly as before — no visible text, no
+        visible diff.</p>
+      </div>
+    </details>
+
+    <details class="faq">
+      <summary>which alphabet does it use?</summary>
+      <div class="a">
+        <p>Two symbols carry the bits, one acts as a boundary marker:</p>
+        <table class="alph">
+          <tr><td><code>U+200B</code></td><td>ZERO WIDTH SPACE</td><td>bit 0</td></tr>
+          <tr><td><code>U+200C</code></td><td>ZERO WIDTH NON-JOINER</td><td>bit 1</td></tr>
+          <tr><td><code>U+2060</code></td><td>WORD JOINER</td><td>frame delimiter</td></tr>
+        </table>
+        <p>Bits are written most-significant first, 8 symbols per byte. Two alternate pairs
+        (<code>U+200B/U+200D</code> and <code>U+200C/U+200D</code>) are selectable; the decoder
+        detects which one was used. The marker is outside the alphabet, so it can never be
+        mistaken for payload.</p>
+      </div>
+    </details>
+
+    <details class="faq">
+      <summary>source or rendered text?</summary>
+      <div class="a">
+        <p>Always the wikitext source. The rendered page is post-parser output — boundary
+        characters may already be gone, and copying it can add or lose whitespace. Any single
+        shifted character breaks every bit after it. Use <em>edit source</em> or
+        <code>?action=raw</code>.</p>
+      </div>
+    </details>
+
+    <details class="faq">
+      <summary>how does page import work?</summary>
+      <div class="a">
+        <p>Paste a full page URL and the decoder works out that wiki's <code>api.php</code>, then
+        asks the API for the wikitext and fills the box. If the wiki blocks cross-origin
+        requests, open the page's <code>?action=raw</code> and paste it by hand. The request goes
+        straight from your browser to the wiki you named — no third party, no relay.</p>
+      </div>
+    </details>
+
+    <details class="faq">
+      <summary>is there a browser extension?</summary>
+      <div class="a">
+        <p>Yes — a Manifest V3 add-on for Chrome and Firefox that reveals <em>plain</em> payloads
+        automatically on MediaWiki article pages. It asks the same wiki for the page's
+        <code>?action=raw</code> wikitext, decodes it locally and shows the result in a small
+        panel. Encrypted payloads are counted but never guessed at. No storage, no telemetry.</p>
+      </div>
+    </details>
+
+    <details class="faq">
+      <summary>how much does it add to the page?</summary>
+      <div class="a">
+        <p>1 byte of message = 8 zero-width characters = 24 bytes of page. A 60-character
+        message is about 2 KB. Page history shows the growth even though the diff looks empty.</p>
+      </div>
+    </details>
+
+    <details class="faq">
+      <summary>is it really hidden?</summary>
+      <div class="a">
+        <p>From readers, yes. From anyone who opens the raw wikitext, no. Encryption is the only
+        thing that makes the content secret; without it, anyone who knows the format can decode
+        the message.</p>
+      </div>
+    </details>
+
+    <details class="faq">
+      <summary>what does the password protect?</summary>
+      <div class="a">
+        <p>Everything. PBKDF2-SHA256 at 600,000 iterations derives an AES-256-GCM key; the salt,
+        IV and tag travel with the payload. No password, no recovery — and a typo cannot be
+        detected, which is why encode asks twice.</p>
+      </div>
+    </details>
+
+    <details class="faq">
+      <summary>will it survive on a wiki I don't control?</summary>
+      <div class="a">
+        <p>Maybe. Edit filters and cleanup bots delete invisible characters. Test with a short
+        message in <code>User:you/sandbox</code>, confirm it survives <code>?action=raw</code>
+        and a VisualEditor no-op save, and keep a local copy of the plaintext.</p>
+      </div>
+    </details>
+
+    <div class="legal">
+      <h3>privacy policy</h3>
+      <p>This tool runs in your browser. It sets no cookies, uses no analytics, and stores
+      nothing on your device. Your message, password and pasted wikitext exist only in memory
+      and vanish when the tab closes.</p>
+      <p>The tool itself makes no request unless you press <em>import</em> — that one goes
+      straight from your browser to the wiki you named. No third-party relay, no account. The
+      clipboard is touched only when you press copy.</p>
+      <p>The file is served by a static host, which may keep ordinary access logs; no analytics
+      or tracking is added by this page.</p>
+      <p class="stamp">last updated 2026-11-11</p>
+
+      <h3>terms of use</h3>
+      <p>Provided as-is, without warranty of any kind. You are responsible for where you place a
+      payload, who you send it to, and how you use it.</p>
+      <p>Do not use this tool to break the rules of the wiki you are editing, to impersonate
+      someone, or to conceal information from people who have a legitimate right to it. Editing
+      a wiki you do not own may require permission and is subject to that wiki's policies and
+      your local law. The authors accept no liability for misuse or for data loss.</p>
+      <p class="stamp">last updated 2026-11-11</p>
+    </div>
+  </div>
+
+  <div class="foot">
+    <span><code>U+2060</code> · WSG2 · crc32 · PBKDF2 600k · AES-256-GCM<br>
+    nothing stored · imports go straight to the wiki</span>
+    <span class="foot-right">made by
+      <a href="https://github.com/0kogg" target="_blank" rel="noopener noreferrer">0kogg</a>
+      <a class="gh" href="https://github.com/0kogg/wikistego" target="_blank" rel="noopener noreferrer">
+        <svg viewBox="0 0 16 16" width="11" height="11" aria-hidden="true"><path fill="currentColor" d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82a7.4 7.4 0 0 1 2-.27c.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8Z"/></svg>
+        github</a>
+    </span>
+  </div>
+</div>
+
+<div id="toast" class="toast" role="status"></div>
+
+<script>
+(function () {
+  'use strict';
+
+  /* ─────────────────────────── constants ─────────────────────────── */
+  var ZW0 = '\u200b';   // zero width space      → bit 0
+  var ZW1 = '\u200c';   // zero width non-joiner → bit 1
+  var ZWJ = '\u200d';   // zero width joiner
+  var MARK = '\u2060';  // word joiner — frame delimiter
+  var BOM  = '\ufeff';  // zero width no-break space
+
+  var ALPHABETS = [
+    { id: 0, chars: [ZW0, ZW1], label: 'U+200B/U+200C' },
+    { id: 1, chars: [ZW0, ZWJ], label: 'U+200B/U+200D' },
+    { id: 2, chars: [ZW1, ZWJ], label: 'U+200C/U+200D' }
+  ];
+  var ZW_SET = new Set([ZW0, ZW1, ZWJ, MARK, BOM]);
+
+  var MAGIC_BYTES = [0x57, 0x53, 0x47, 0x32];              // "WSG2"
+  var MAGIC_BITS = MAGIC_BYTES.map(function (b) {
+    return b.toString(2).padStart(8, '0');
+  }).join('');
+
+  var PBKDF2_ITER = 600000;
+  var F_ENC = 0x01, F_ALPH = 0x0e, F_WHITEN = 0x10;
+
+  var te = new TextEncoder();
+  var tdFatal = new TextDecoder('utf-8', { fatal: true });
+
+  /* ─────────────────────────── crc32 ─────────────────────────── */
+  var CRC_TABLE = (function () {
+    var t = new Uint32Array(256), n, k, c;
+    for (n = 0; n < 256; n++) {
+      c = n;
+      for (k = 0; k < 8; k++) c = (c & 1) ? (0xEDB88320 ^ (c >>> 1)) : (c >>> 1);
+      t[n] = c >>> 0;
+    }
+    return t;
+  })();
+
+  function crc32(bytes) {
+    var c = 0xFFFFFFFF, i;
+    for (i = 0; i < bytes.length; i++) {
+      c = (c >>> 8) ^ CRC_TABLE[(c ^ bytes[i]) & 0xff];
+    }
+    return (c ^ 0xFFFFFFFF) >>> 0;
+  }
+
+  /* ─────────────────────────── bit helpers ─────────────────────────── */
+  function bitsToByte(bits, pos) {
+    var v = 0, i;
+    for (i = 0; i < 8; i++) v = (v << 1) | (bits.charCodeAt(pos + i) === 49 ? 1 : 0);
+    return v;
+  }
+  function bitsToU32(bits, pos) {
+    var v = 0, i;
+    for (i = 0; i < 32; i++) v = ((v << 1) | (bits.charCodeAt(pos + i) === 49 ? 1 : 0)) >>> 0;
+    return v;
+  }
+  function hex(bytes) {
+    var s = '', i;
+    for (i = 0; i < bytes.length; i++) s += (bytes[i] < 16 ? '0' : '') + bytes[i].toString(16);
+    return s;
+  }
+
+  /* ─────────────────────────── frame ───────────────────────────
+     U+2060 | "WSG2" | flags | len(2B BE) | payload | crc32(4B BE) | U+2060
+     flags: bit0 encrypted, bits1-3 alphabet id, bit4 whitened          */
+  function buildFrame(payload, flags) {
+    if (payload.length > 0xffff) throw new Error('payload exceeds 65535 bytes');
+    var total = 7 + payload.length + 4;
+    var out = new Uint8Array(total);
+    out[0] = MAGIC_BYTES[0]; out[1] = MAGIC_BYTES[1];
+    out[2] = MAGIC_BYTES[2]; out[3] = MAGIC_BYTES[3];
+    out[4] = flags & 0xff;
+    out[5] = (payload.length >>> 8) & 0xff;
+    out[6] = payload.length & 0xff;
+    out.set(payload, 7);
+    var c = crc32(out.subarray(0, 7 + payload.length));
+    var o = 7 + payload.length;
+    out[o]     = (c >>> 24) & 0xff;
+    out[o + 1] = (c >>> 16) & 0xff;
+    out[o + 2] = (c >>> 8) & 0xff;
+    out[o + 3] = c & 0xff;
+    return out;
+  }
+
+  function frameToZwc(bytes, al) {
+    var s = MARK, i, k, b;
+    for (i = 0; i < bytes.length; i++) {
+      b = bytes[i];
+      for (k = 7; k >= 0; k--) s += ((b >> k) & 1) ? al.chars[1] : al.chars[0];
+    }
+    return s + MARK;
+  }
+
+  function symbolsToBits(str, al) {
+    var a = al.chars[0], b = al.chars[1], out = [], i, c;
+    for (i = 0; i < str.length; i++) {
+      c = str[i];
+      if (c === a) out.push('0');
+      else if (c === b) out.push('1');
+    }
+    return out.join('');
+  }
+
+  function tryDecodeAt(bits, pos) {
+    if (bits.length - pos < 32 + 8 + 16 + 32) return null;
+    var flags = bitsToByte(bits, pos + 32);
+    var len = (bitsToByte(bits, pos + 40) << 8) | bitsToByte(bits, pos + 48);
+    var start = pos + 56;
+    var end = start + len * 8;
+    if (end + 32 > bits.length) return null;
+
+    var payload = new Uint8Array(len), i;
+    for (i = 0; i < len; i++) payload[i] = bitsToByte(bits, start + i * 8);
+
+    var frame = new Uint8Array(7 + len);
+    frame[0] = MAGIC_BYTES[0]; frame[1] = MAGIC_BYTES[1];
+    frame[2] = MAGIC_BYTES[2]; frame[3] = MAGIC_BYTES[3];
+    frame[4] = flags;
+    frame[5] = (len >>> 8) & 0xff;
+    frame[6] = len & 0xff;
+    frame.set(payload, 7);
+
+    if (crc32(frame) !== bitsToU32(bits, end)) return null;
+
+    return { payloadBytes: payload, flags: flags, len: len, bitOffset: pos };
+  }
+
+  /* legacy v1: U+200D | bits | U+200D, encrypted only, no frame */
+  function decodeV1(text) {
+    var i = text.indexOf(ZWJ);
+    if (i < 0) return null;
+    var j = text.indexOf(ZWJ, i + 1);
+    if (j < 0) return null;
+    var span = text.slice(i + 1, j);
+    if (!span) return null;
+
+    var bits = '', k, c;
+    for (k = 0; k < span.length; k++) {
+      c = span[k];
+      if (c === ZW0) bits += '0';
+      else if (c === ZW1) bits += '1';
+      else return null;
+    }
+    if (bits.length < 352) return null;   // 44 bytes = salt+iv+tag minimum
+
+    var n = bits.length - (bits.length % 8);
+    var payload = new Uint8Array(n / 8);
+    for (k = 0; k < payload.length; k++) {
+      payload[k] = parseInt(bits.slice(k * 8, k * 8 + 8), 2);
+    }
+    return {
+      payloadBytes: payload, flags: F_ENC, len: payload.length,
+      legacy: true, alphabet: 0, position: i + 1, bitOffset: 0
+    };
+  }
+
+  function keyOf(r) { return hex(r.payloadBytes) + '/' + r.flags; }
+
+  function decodeText(text) {
+    var out = [], corrupt = 0;
+    var markerKeys = new Set(), markerBytes = new Set(), scanKeys = new Set();
+
+    /* stage 1: payloads still wrapped in U+2060 delimiters */
+    var marks = [], i;
+    for (i = 0; i < text.length; i++) if (text[i] === MARK) marks.push(i);
+
+    for (i = 0; i + 1 < marks.length; i++) {
+      var span = text.slice(marks[i] + 1, marks[i + 1]);
+      if (!span) continue;
+
+      for (var a = 0; a < ALPHABETS.length; a++) {
+        var al = ALPHABETS[a];
+        var bits = symbolsToBits(span, al);
+        if (bits.length < 56) continue;
+
+        var p = bits.indexOf(MAGIC_BITS);
+        while (p >= 0) {
+          var r = tryDecodeAt(bits, p);
+          if (r) {
+            r.alphabet = al.id; r.position = marks[i] + 1; r.bitOffset = p;
+            var bk = keyOf(r), mk = bk + '@' + marks[i];
+            if (!markerKeys.has(mk)) {
+              markerKeys.add(mk); markerBytes.add(bk); out.push(r);
+            }
+          } else {
+            corrupt++;
+          }
+          p = bits.indexOf(MAGIC_BITS, p + 1);
+        }
+      }
+    }
+
+    /* stage 2: delimiters may have been trimmed — scan the raw stream */
+    for (var b = 0; b < ALPHABETS.length; b++) {
+      var al2 = ALPHABETS[b];
+      var bits2 = symbolsToBits(text, al2);
+      if (bits2.length < 56) continue;
+
+      var q = bits2.indexOf(MAGIC_BITS);
+      while (q >= 0) {
+        var r2 = tryDecodeAt(bits2, q);
+        if (r2) {
+          var k2 = keyOf(r2);
+          if (!markerBytes.has(k2) && !scanKeys.has(k2)) {
+            r2.alphabet = al2.id; r2.position = null; r2.bitOffset = q;
+            scanKeys.add(k2); out.push(r2);
+          }
+        }
+        q = bits2.indexOf(MAGIC_BITS, q + 1);
+      }
+    }
+
+    if (!out.length) {
+      var v1 = decodeV1(text);
+      if (v1) out.push(v1);
+    }
+    return { items: out, corrupt: corrupt };
+  }
+
+  /* ─────────────────────────── crypto ─────────────────────────── */
+  function requireCrypto() {
+    if (!(typeof crypto !== 'undefined' && crypto && crypto.subtle)) {
+      throw new Error('WebCrypto unavailable — open this file directly or serve it over https');
+    }
+  }
+
+  async function deriveKey(pw, salt) {
+    requireCrypto();
+    var raw = await crypto.subtle.importKey(
+      'raw', te.encode(pw), 'PBKDF2', false, ['deriveKey']
+    );
+    return crypto.subtle.deriveKey(
+      { name: 'PBKDF2', salt: salt, iterations: PBKDF2_ITER, hash: 'SHA-256' },
+      raw, { name: 'AES-GCM', length: 256 }, false, ['encrypt', 'decrypt']
+    );
+  }
+
+  async function aesEnc(msgBytes, pw) {
+    var salt = crypto.getRandomValues(new Uint8Array(16));
+    var iv = crypto.getRandomValues(new Uint8Array(12));
+    var key = await deriveKey(pw, salt);
+    var ct = new Uint8Array(await crypto.subtle.encrypt({ name: 'AES-GCM', iv: iv }, key, msgBytes));
+    var out = new Uint8Array(28 + ct.length);
+    out.set(salt, 0); out.set(iv, 16); out.set(ct, 28);
+    return out;
+  }
+
+  async function aesDec(data, pw) {
+    if (data.length < 44) throw new Error('ciphertext too short');
+    var key = await deriveKey(pw, data.slice(0, 16));
+    var pt = await crypto.subtle.decrypt(
+      { name: 'AES-GCM', iv: data.slice(16, 28) }, key, data.slice(28)
+    );
+    return new Uint8Array(pt);
+  }
+
+  /* deterministic whitening — cosmetic only, no secrecy */
+  function whitenBytes(bytes) {
+    var x = 0x9e3779b9 >>> 0;
+    var out = new Uint8Array(bytes.length), i;
+    for (i = 0; i < bytes.length; i++) {
+      x ^= (x << 13) >>> 0; x >>>= 0;
+      x ^= x >>> 17;
+      x ^= (x << 5) >>> 0;  x >>>= 0;
+      out[i] = bytes[i] ^ (x & 0xff);
+    }
+    return out;
+  }
+
+  async function decryptItem(item, pw) {
+    if (item.flags & F_ENC) {
+      if (!pw) {
+        var e = new Error('password required');
+        e.code = 'nopw';
+        throw e;
+      }
+      return tdFatal.decode(await aesDec(item.payloadBytes, pw));
+    }
+    var b = item.payloadBytes;
+    if (item.flags & F_WHITEN) b = whitenBytes(b);
+    return tdFatal.decode(b);
+  }
+
+  /* ─────────────────────────── placement ─────────────────────────── */
+  function protectedRanges(text) {
+    var r = [];
+    function add(s, e) { if (e > s) r.push([s, e]); }
+    var m;
+
+    var comments = /<!--[\s\S]*?-->/g;
+    while ((m = comments.exec(text))) add(m.index, m.index + m[0].length);
+
+    var tags = /<(nowiki|ref|references|gallery|math|syntaxhighlight|source|timeline|score|mapframe|templatedata|pre|poem|chem|graph)\b[^>]*>[\s\S]*?<\/\1\s*>/gi;
+    while ((m = tags.exec(text))) add(m.index, m.index + m[0].length);
+
+    var selfTags = /<(ref|references)\b[^>]*\/>/gi;
+    while ((m = selfTags.exec(text))) add(m.index, m.index + m[0].length);
+
+    var urls = /\b(?:https?:\/\/|ftp:\/\/)[^\s\]\|}<>"']+/gi;
+    while ((m = urls.exec(text))) add(m.index, m.index + m[0].length);
+
+    var htmlTags = /<\/?[A-Za-z][^>]*>/g;
+    while ((m = htmlTags.exec(text))) add(m.index, m.index + m[0].length);
+
+    /* [[ ... ]] */
+    var stack = [], i;
+    for (i = 0; i < text.length - 1; i++) {
+      if (text[i] === '[' && text[i + 1] === '[') { stack.push(i); i++; }
+      else if (text[i] === ']' && text[i + 1] === ']') {
+        if (stack.length) add(stack.pop(), i + 2);
+        i++;
+      }
+    }
+    /* {{ ... }} */
+    stack = [];
+    for (i = 0; i < text.length - 1; i++) {
+      if (text[i] === '{' && text[i + 1] === '{') { stack.push(i); i++; }
+      else if (text[i] === '}' && text[i + 1] === '}') {
+        if (stack.length) add(stack.pop(), i + 2);
+        i++;
+      }
+    }
+    /* {| ... |} */
+    stack = [];
+    for (i = 0; i < text.length - 1; i++) {
+      if (text[i] === '{' && text[i + 1] === '|') { stack.push(i); i++; }
+      else if (text[i] === '|' && text[i + 1] === '}') {
+        if (stack.length) add(stack.pop(), i + 2);
+        i++;
+      }
+    }
+    return r;
+  }
+
+  function makeRangeTest(ranges) {
+    var rs = ranges.slice().sort(function (a, b) { return a[0] - b[0]; });
+    return function (pos) {
+      var lo = 0, hi = rs.length - 1, mid;
+      while (lo <= hi) {
+        mid = (lo + hi) >> 1;
+        if (pos < rs[mid][0]) hi = mid - 1;
+        else if (pos >= rs[mid][1]) lo = mid + 1;
+        else return true;
+      }
+      return false;
+    };
+  }
+
+  function isCandidateLine(line) {
+    if (!line.trim()) return false;
+    if (/^\s/.test(line)) return false;                 // preformatted
+    if (/^[#*:;]/.test(line)) return false;              // list / indent / definition
+    if (/^\{\|/.test(line) || /^\|\}/.test(line)) return false;
+    if (/^\|-/.test(line) || /^\|/.test(line) || /^!/.test(line)) return false;
+    if (/^=+.+?=+\s*$/.test(line)) return false;        // heading
+    if (/^----/.test(line)) return false;               // horizontal rule
+    if (/^<[^>]+>\s*$/.test(line)) return false;        // lone tag
+    if (/^\{\{[\s\S]*\}\}\s*$/.test(line)) return false;// template-only line
+    if (/^\[\[[^\]]*\]\]\s*$/.test(line)) return false; // link-only line
+    if (!/[A-Za-z]/.test(line)) return false;           // no prose
+    return true;
+  }
+
+  function findSlotsImpl(text) {
+    var inRange = makeRangeTest(protectedRanges(text));
+    var slots = [];
+    var lineStart = 0;
+
+    while (lineStart <= text.length) {
+      var nl = text.indexOf('\n', lineStart);
+      var lineEnd = (nl < 0) ? text.length : nl;
+      var line = text.slice(lineStart, lineEnd);
+
+      if (isCandidateLine(line)) {
+        var pos;
+        for (pos = lineStart + 2; pos < lineEnd; pos++) {
+          var prev = text[pos - 1];
+          var next = text[pos];
+          if (next !== ' ') continue;
+          if (!/[.!?,;:]/.test(prev)) continue;
+          if (!/[A-Za-z0-9)\]\u2019\u201d"'.\u2026]/.test(text[pos - 2])) continue;
+
+          var after = text[pos + 1];
+          if (!after || after === ' ' || after === '\t' || ZW_SET.has(after)) continue;
+
+          if (inRange(pos)) continue;
+
+          var score = /[.!?]/.test(prev) ? 100 : 60;
+          var rel = (pos - lineStart) / Math.max(1, lineEnd - lineStart);
+          if (rel > 0.2 && rel < 0.8) score += 10;
+          if (line.length < 40) score -= 15;
+          if (line.length > 400) score -= 5;
+          if (line.indexOf(MARK) >= 0) score -= 25;
+
+          slots.push({
+            pos: pos, score: score, lineStart: lineStart, lineEnd: lineEnd,
+            ctx: text.slice(pos - 1, pos + 1)
+          });
+        }
+      }
+      if (nl < 0) break;
+      lineStart = lineEnd + 1;
+    }
+
+    slots.sort(function (a, b) { return b.score - a.score || a.pos - b.pos; });
+
+    var out = [], usedLines = new Set();
+    for (var i = 0; i < slots.length; i++) {
+      if (usedLines.has(slots[i].lineStart)) continue;
+      usedLines.add(slots[i].lineStart);
+      out.push(slots[i]);
+      if (out.length >= 6) break;
+    }
+    return out;
+  }
+
+  function snippetFor(text, slot, radius) {
+    var from = Math.max(0, slot.pos - radius);
+    var to = Math.min(text.length, slot.pos + radius);
+    return { before: text.slice(from, slot.pos), after: text.slice(slot.pos, to) };
+  }
+
+  /* ─────────────────────────── state + ui helpers ─────────────────────────── */
+  var state = { payload: '', plain: false };
+  var lastSlots = [];
+  var lastPatched = '';
+
+  function esc(s) {
+    return String(s)
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  }
+  function $(id) { return document.getElementById(id); }
+  function showErr(id, msg) { var e = $(id); e.textContent = msg; e.style.display = 'block'; }
+  function hideErr(id) { $(id).style.display = 'none'; }
+  function bytes(n) {
+    if (n < 1024) return n + ' B';
+    return (n / 1024).toFixed(1) + ' KB';
+  }
+
+  function tab(name, el) {
+    var tabs = document.querySelectorAll('.tab');
+    var panels = document.querySelectorAll('.panel');
+    var i;
+    for (i = 0; i < tabs.length; i++) tabs[i].classList.remove('on');
+    for (i = 0; i < panels.length; i++) panels[i].classList.remove('on');
+    el.classList.add('on');
+    $('p-' + name).classList.add('on');
+    if (name === 'place') renderPayloadHint();
+  }
+
+  function updateMode() {
+    var enc = $('e-enc').checked;
+    $('e-pw-wrap').style.display = enc ? '' : 'none';
+    $('e-whiten-wrap').style.display = enc ? 'none' : '';
+    updateCounter();
+  }
+
+  function renderPayloadHint() {
+    var el = $('pl-payload');
+    if (!state.payload) {
+      el.textContent = 'no payload yet — encode a message first, it stays in memory across tabs.';
+      return;
+    }
+    el.innerHTML =
+      'current payload: <strong>' + state.payload.length + '</strong> zwc chars · ' +
+      bytes(state.payload.length * 3) + ' added to the page · ' +
+      (state.plain ? 'plain' : 'encrypted');
+  }
+
+  function checkCrypto() {
+    var b = $('crypto-warn');
+    if (typeof crypto === 'undefined' || !crypto.subtle) {
+      b.textContent = 'WebCrypto is unavailable here. Encrypted mode needs it — open this file ' +
+        'directly (file://) or serve it over https.';
+      b.classList.add('on');
+    }
+  }
+
+  /* ─────────────────────────── encode ─────────────────────────── */
+  async function doEncode() {
+    hideErr('e-err');
+    $('e-out').classList.remove('on');
+
+    var msg = $('e-msg').value;
+    var enc = $('e-enc').checked;
+    var alphId = parseInt($('e-alph').value, 10) || 0;
+    var al = ALPHABETS[alphId] || ALPHABETS[0];
+
+    if (msg.length === 0) return showErr('e-err', 'message is empty');
+
+    var msgBytes = te.encode(msg);
+    if (msgBytes.length > 0xffff) return showErr('e-err', 'message is too long (max 65535 bytes)');
+
+    var pw = '';
+    var payload;
+    var flags = 0;
+
+    try {
+      if (enc) {
+        pw = $('e-pw').value;
+        var pw2 = $('e-pw2').value;
+        if (!pw) return showErr('e-err', 'password is empty');
+        if (pw !== pw2) return showErr('e-err', 'passwords do not match');
+        payload = await aesEnc(msgBytes, pw);
+        if (payload.length > 0xffff) return showErr('e-err', 'ciphertext too large');
+        flags |= F_ENC;
+      } else {
+        payload = msgBytes;
+        if ($('e-whiten').checked) { payload = whitenBytes(payload); flags |= F_WHITEN; }
+      }
+
+      flags |= (al.id << 1) & F_ALPH;
+
+      var frame = buildFrame(payload, flags);
+      var zwc = frameToZwc(frame, al);
+
+      state.payload = zwc;
+      state.plain = !enc;
+
+      $('e-bytes').textContent = payload.length;
+      $('e-chars').textContent = zwc.length;
+      $('e-size').textContent = '+' + bytes(zwc.length * 3);
+      $('e-manual').value = zwc;
+
+      var btn = $('btn-cp');
+      btn.textContent = 'copy';
+      btn.classList.remove('ok');
+
+      var check = decodeText(zwc);
+      var note;
+      if (!check.items.length) {
+        note = 'self-test <span style="color:var(--err)">FAILED</span>';
+      } else {
+        try {
+          var round = await decryptItem(check.items[0], enc ? pw : '');
+          note = round === msg
+            ? 'self-test <span style="color:var(--ok)">✓</span> · ' + frame.length + ' byte frame'
+            : 'self-test <span style="color:var(--err)">FAILED</span> — mismatch';
+        } catch (e) {
+          note = 'self-test <span style="color:var(--err)">FAILED</span> — ' + esc(e.message);
+        }
+      }
+      if (enc && pw.length < 12) {
+        note += '<br><span style="color:var(--warn)">weak password</span> — the ciphertext is public';
+      }
+      $('e-test').innerHTML = note;
+      $('e-out').classList.add('on');
+    } catch (e) {
+      showErr('e-err', 'failed: ' + e.message);
+    }
+  }
+
+  async function copyText(s) {
+    try {
+      await navigator.clipboard.writeText(s);
+      return true;
+    } catch (e) { /* fall through */ }
+    var ta = document.createElement('textarea');
+    ta.value = s;
+    ta.style.position = 'fixed';
+    ta.style.opacity = '0';
+    document.body.appendChild(ta);
+    ta.focus(); ta.select();
+    var ok = false;
+    try { ok = document.execCommand('copy'); } catch (e2) { /* ignore */ }
+    document.body.removeChild(ta);
+    return ok;
+  }
+
+  async function copyPL() {
+    if (!state.payload) return;
+    var ok = await copyText(state.payload);
+    var btn = $('btn-cp');
+    btn.textContent = ok ? 'copied ✓' : 'copy failed';
+    btn.classList.toggle('ok', ok);
+    if (ok) setTimeout(function () { btn.textContent = 'copy'; btn.classList.remove('ok'); }, 2000);
+  }
+
+  function selectManual(id) {
+    var el = $(id);
+    el.focus();
+    el.select();
+  }
+
+  function clrE() {
+    $('e-msg').value = ''; $('e-pw').value = ''; $('e-pw2').value = '';
+    $('e-out').classList.remove('on');
+    hideErr('e-err');
+    state.payload = ''; state.plain = false;
+    updateCounter();
+  }
+
+  /* ─────────────────────────── decode ─────────────────────────── */
+  async function doDecode() {
+    hideErr('d-err');
+    var out = $('d-out');
+    out.innerHTML = ''; out.classList.remove('on');
+
+    var text = $('d-wiki').value;
+    var pw = $('d-pw').value;
+
+    if (!text) return showErr('d-err', 'paste the wikitext source first');
+
+    var res = decodeText(text);
+
+    if (!res.items.length) {
+      if (res.corrupt) {
+        return showErr('d-err', 'a frame was found but its checksum failed — the payload was altered');
+      }
+      return showErr('d-err', 'no hidden payload found');
+    }
+
+    out.classList.add('on');
+    out.innerHTML = '<div class="out-lbl">' + res.items.length +
+      ' payload' + (res.items.length > 1 ? 's' : '') + ' found</div>';
+
+    for (var i = 0; i < res.items.length; i++) {
+      var it = res.items[i];
+      var card = document.createElement('div');
+      card.className = 'item';
+
+      var kind, cls;
+      if (it.legacy) { kind = 'legacy v1'; cls = 'leg'; }
+      else if (it.flags & F_ENC) { kind = 'encrypted'; cls = 'enc'; }
+      else { kind = 'plain'; cls = 'plain'; }
+
+      var where = it.position != null
+        ? 'at char ' + it.position
+        : 'bit offset ' + it.bitOffset;
+      var meta = 'alphabet ' + (ALPHABETS[it.alphabet] ? ALPHABETS[it.alphabet].label : '?') +
+        ' · ' + where + ' · ' + it.payloadBytes.length + ' bytes';
+
+      var head = document.createElement('div');
+      head.className = 'item-head';
+      head.innerHTML = '<span class="badge ' + cls + '">' + kind + '</span>' +
+        '<span class="meta">' + esc(meta) + '</span>';
+      card.appendChild(head);
+
+      var body = document.createElement('div');
+      body.className = 'item-body';
+
+      try {
+        if ((it.flags & F_ENC) && !pw) {
+          body.className = 'item-err';
+          body.textContent = 'encrypted — enter the password';
+        } else {
+          var msg = await decryptItem(it, pw);
+          body.className = 'revealed';
+          body.textContent = msg;
+        }
+      } catch (e) {
+        body.className = 'item-err';
+        if (e.code === 'nopw') {
+          body.textContent = 'encrypted — enter the password';
+        } else if ((it.flags & F_ENC)) {
+          body.textContent = 'could not decrypt — wrong password or altered ciphertext';
+        } else {
+          body.textContent = 'not valid UTF-8 (' + e.message + ')';
+        }
+      }
+      if (body.className === 'revealed') {
+        var actions = document.createElement('div');
+        actions.className = 'item-actions';
+        var cp = document.createElement('button');
+        cp.className = 'btn-cp';
+        cp.textContent = 'copy';
+        (function (text) {
+          cp.addEventListener('click', async function () {
+            var ok = await copyText(text);
+            cp.textContent = ok ? 'copied ✓' : 'copy failed';
+            cp.classList.toggle('ok', ok);
+            if (ok) setTimeout(function () {
+              cp.textContent = 'copy'; cp.classList.remove('ok');
+            }, 1600);
+          });
+        })(body.textContent);
+        actions.appendChild(cp);
+        card.appendChild(actions);
+      }
+
+      card.appendChild(body);
+      out.appendChild(card);
+    }
+  }
+
+  function clrD() {
+    $('d-wiki').value = ''; $('d-pw').value = ''; $('d-page').value = '';
+    $('d-out').innerHTML = ''; $('d-out').classList.remove('on');
+    $('d-import-note').textContent = 'fetches that page\'s wikitext straight from the wiki';
+    hideErr('d-err');
+  }
+
+  /* ─────────────────────────── place ─────────────────────────── */
+  function findSlots() {
+    hideErr('pl-err');
+    var out = $('pl-out');
+    out.innerHTML = ''; out.classList.remove('on');
+    lastSlots = [];
+
+    if (!state.payload) {
+      return showErr('pl-err', 'no payload in memory — encode a message first');
+    }
+    var text = $('pl-wiki').value;
+    if (!text) return showErr('pl-err', 'paste the destination wikitext');
+
+    if (text.indexOf(state.payload) >= 0) {
+      return showErr('pl-err', 'this page already contains the payload');
+    }
+
+    lastSlots = findSlotsImpl(text);
+    if (!lastSlots.length) {
+      return showErr('pl-err', 'no safe slot — every line is a list, heading, table or template');
+    }
+
+    out.classList.add('on');
+    out.innerHTML = '<div class="out-lbl">' + lastSlots.length +
+      ' safe slot' + (lastSlots.length > 1 ? 's' : '') + '</div>';
+
+    for (var i = 0; i < lastSlots.length; i++) {
+      (function (idx) {
+        var slot = lastSlots[idx];
+        var snip = snippetFor(text, slot, 55);
+        var div = document.createElement('div');
+        div.className = 'slot';
+        div.style.animationDelay = (idx * 45) + 'ms';
+
+        var s = document.createElement('div');
+        s.className = 'snip';
+        s.innerHTML = esc(snip.before) + '<span class="zwmark">⟦ZW⟧</span>' + esc(snip.after);
+
+        var kv = document.createElement('div');
+        kv.className = 'kv';
+        kv.textContent = 'score ' + slot.score + ' · char ' + slot.pos;
+
+        var row = document.createElement('div');
+        row.className = 'row';
+        var btn = document.createElement('button');
+        btn.className = 'btn btn-p';
+        btn.textContent = 'insert here →';
+        btn.addEventListener('click', function () { applySlot(idx); });
+        row.appendChild(btn);
+
+        div.appendChild(s);
+        div.appendChild(kv);
+        div.appendChild(row);
+        out.appendChild(div);
+      })(i);
+    }
+  }
+
+  function applySlot(idx) {
+    var slot = lastSlots[idx];
+    if (!slot) return;
+
+    var text = $('pl-wiki').value;
+    if (text.slice(slot.pos - 1, slot.pos + 1) !== slot.ctx) {
+      return showErr('pl-err', 'the page changed since the scan — find slots again');
+    }
+
+    var patched = text.slice(0, slot.pos) + state.payload + text.slice(slot.pos);
+    lastPatched = patched;
+
+    var out = $('pl-out');
+    var prev = out.querySelector('.patched-box');
+    if (prev) prev.remove();
+
+    var box = document.createElement('div');
+    box.className = 'patched-box';
+    box.innerHTML =
+      '<div class="out-lbl" style="margin-top:16px">patched wikitext — copy it all</div>' +
+      '<textarea id="pl-patched" class="mono" readonly spellcheck="false" style="min-height:170px"></textarea>' +
+      '<div class="row">' +
+      '<button class="btn btn-p" id="pl-copy">copy patched</button>' +
+      '<button class="btn btn-s" id="pl-check">verify</button>' +
+      '</div>' +
+      '<div class="hint" id="pl-check-note"></div>' +
+      '<div class="note">' +
+      '<em>→</em> edit source → select all → paste → save<br>' +
+      '<em>→</em> then decode the saved page before trusting it' +
+      '</div>';
+
+    out.appendChild(box);
+
+    var ta = $('pl-patched');
+    ta.value = patched;
+
+    $('pl-copy').addEventListener('click', async function () {
+      var btn = $('pl-copy');
+      var ok = await copyText(lastPatched);
+      btn.textContent = ok ? 'copied ✓' : 'copy failed';
+      if (ok) setTimeout(function () { btn.textContent = 'copy patched'; }, 2000);
+    });
+
+    $('pl-check').addEventListener('click', function () {
+      var res = decodeText(lastPatched);
+      var note = $('pl-check-note');
+      if (res.items.length === 1) {
+        note.innerHTML = '<span style="color:var(--ok)">✓ verified</span> — one payload at char ' +
+          res.items[0].position;
+      } else if (res.items.length > 1) {
+        note.innerHTML = '<span style="color:var(--warn)">!</span> ' + res.items.length +
+          ' payloads — did the page already contain one?';
+      } else {
+        note.innerHTML = '<span style="color:var(--err)">✕</span> no payload in the patched page';
+      }
+    });
+  }
+
+  function plClear() {
+    $('pl-wiki').value = '';
+    $('pl-out').innerHTML = ''; $('pl-out').classList.remove('on');
+    hideErr('pl-err');
+    lastSlots = []; lastPatched = '';
+  }
+
+  /* ─────────────────────────── qol ─────────────────────────── */
+  var toastTimer = null;
+  function toast(msg) {
+    var t = $('toast');
+    if (!t) return;
+    t.textContent = msg;
+    t.classList.add('on');
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(function () { t.classList.remove('on'); }, 1800);
+  }
+
+  function setTheme(v) {
+    if (!v || v === 'auto') document.documentElement.removeAttribute('data-theme');
+    else document.documentElement.setAttribute('data-theme', v);
+  }
+
+  function togglePw(id, btn) {
+    var el = $(id);
+    var show = el.type === 'password';
+    el.type = show ? 'text' : 'password';
+    btn.textContent = show ? 'hide' : 'show';
+  }
+
+  function updateCounter() {
+    var msg = $('e-msg').value;
+    var enc = $('e-enc').checked;
+    var n = te.encode(msg).length;
+    var frame = n + (enc ? 44 : 0) + 11;
+    var chars = frame * 8 + 2;
+    $('e-count').textContent = msg.length + ' chars · +' + bytes(chars * 3) + ' on page';
+  }
+
+  function parsePageUrl(raw) {
+    var m = raw.match(/^https?:\/\/([^\/]+)\/wiki\/(.+?)(?:[?#].*)?$/);
+    if (m) return { endpoint: 'https://' + m[1] + '/w/api.php', title: decodeURIComponent(m[2]).replace(/_/g, ' ') };
+    m = raw.match(/^https?:\/\/([^\/]+)\/w\/index\.php\?(?:.*&)?title=([^&#]+)/);
+    if (m) return { endpoint: 'https://' + m[1] + '/w/api.php', title: decodeURIComponent(m[2]).replace(/_/g, ' ') };
+    m = raw.match(/^https?:\/\/([^\/]+)\/api\.php\?(?:.*&)?page=([^&#]+)/);
+    if (m) return { endpoint: 'https://' + m[1] + '/api.php', title: decodeURIComponent(m[2]) };
+    return null;
+  }
+
+  async function importPage() {
+    hideErr('d-err');
+    var note = $('d-import-note');
+    var raw = $('d-page').value.trim();
+    if (!raw) return showErr('d-err', 'paste a wiki page URL');
+
+    var target = parsePageUrl(raw);
+    if (!target) {
+      return showErr('d-err', 'need a full page URL, e.g. https://en.wikipedia.org/wiki/Example');
+    }
+
+    note.textContent = 'importing…';
+    var url = target.endpoint + '?action=parse&page=' +
+      encodeURIComponent(target.title) +
+      '&prop=wikitext&format=json&formatversion=2&origin=*';
+
+    try {
+      var r = await fetch(url, { credentials: 'omit' });
+      if (!r.ok) throw new Error('HTTP ' + r.status);
+      var data = await r.json();
+      if (data.error) throw new Error(data.error.info || data.error.code);
+      var w = data.parse && data.parse.wikitext;
+      if (w && typeof w === 'object') w = w['*'];
+      if (typeof w !== 'string') throw new Error('no wikitext in response');
+      $('d-wiki').value = w;
+      note.textContent = 'imported "' + target.title + '" · ' + w.length + ' chars';
+      toast('page imported');
+      hideErr('d-err');
+    } catch (e) {
+      note.textContent = 'fetches that page\'s wikitext straight from the wiki';
+      showErr('d-err', 'import failed: ' + e.message +
+        ' — if it is CORS, open the page\'s ?action=raw and paste it');
+    }
+  }
+
+  function wireDrop(id) {
+    var el = $(id);
+    if (!el) return;
+    ['dragenter', 'dragover'].forEach(function (ev) {
+      el.addEventListener(ev, function (e) {
+        e.preventDefault(); el.classList.add('drop-hover');
+      });
+    });
+    ['dragleave', 'drop'].forEach(function (ev) {
+      el.addEventListener(ev, function (e) {
+        e.preventDefault(); el.classList.remove('drop-hover');
+      });
+    });
+    el.addEventListener('drop', function (e) {
+      var f = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
+      if (!f) return;
+      var rd = new FileReader();
+      rd.onload = function () {
+        el.value = String(rd.result);
+        toast('loaded ' + f.name);
+      };
+      rd.readAsText(f);
+    });
+  }
+
+  /* ─────────────────────────── export / init ─────────────────────────── */
+  var API = {
+    tab: tab, updateMode: updateMode, setTheme: setTheme, togglePw: togglePw,
+    doEncode: doEncode, copyPL: copyPL, selectManual: selectManual, clrE: clrE,
+    doDecode: doDecode, importPage: importPage, clrD: clrD,
+    findSlots: findSlots, plClear: plClear
+  };
+  if (typeof window !== 'undefined') window.WS = API;
+
+  globalThis.__stego = {
+    ZW0: ZW0, ZW1: ZW1, ZWJ: ZWJ, MARK: MARK, BOM: BOM,
+    ALPHABETS: ALPHABETS, F_ENC: F_ENC, F_WHITEN: F_WHITEN, PBKDF2_ITER: PBKDF2_ITER,
+    crc32: crc32, buildFrame: buildFrame, frameToZwc: frameToZwc,
+    symbolsToBits: symbolsToBits, tryDecodeAt: tryDecodeAt, decodeText: decodeText,
+    decodeV1: decodeV1, decryptItem: decryptItem,
+    aesEnc: aesEnc, aesDec: aesDec, whitenBytes: whitenBytes,
+    findSlotsImpl: findSlotsImpl, protectedRanges: protectedRanges
+  };
+
+  if (typeof document !== 'undefined' && document.getElementById) {
+    updateMode();
+    checkCrypto();
+    updateCounter();
+    $('e-msg').addEventListener('input', updateCounter);
+    $('e-enc').addEventListener('change', updateMode);
+    wireDrop('d-wiki');
+    wireDrop('pl-wiki');
+
+    var themeSel = $('theme');
+    themeSel.value = document.documentElement.getAttribute('data-theme') || 'auto';
+
+    document.addEventListener('keydown', function (e) {
+      if (!(e.ctrlKey || e.metaKey) || e.key !== 'Enter') return;
+      var panel = document.querySelector('.panel.on');
+      if (!panel) return;
+      if (panel.id === 'p-encode') doEncode();
+      else if (panel.id === 'p-decode') doDecode();
+      else if (panel.id === 'p-place') findSlots();
+    });
+
+    $('e-msg').focus();
+  }
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,23 @@
+{
+  "name": "wikistego",
+  "version": "2.0.0",
+  "private": true,
+  "description": "Hide plain or encrypted messages in MediaWiki pages with zero-width characters",
+  "author": "0kogg",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/0kogg/wikistego.git"
+  },
+  "scripts": {
+    "build": "npm run build:decode && npm run build:min && npm run build:extension",
+    "build:decode": "python3 tools/build_decode.py",
+    "build:min": "node tools/build_min.js",
+    "build:extension": "python3 tools/build_extension.py",
+    "build:pages": "node tools/build_pages.js",
+    "test": "node tests/run.js && node tests/ui.js && node tests/decode.js && node tests/min.js && node tests/extension.js"
+  },
+  "devDependencies": {
+    "jsdom": "^29.1.1",
+    "terser": "^5.51.2"
+  }
+}

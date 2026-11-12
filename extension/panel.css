@@ -1,0 +1,158 @@
+/* WikiStego panel — injected into wiki pages. All rules are id-scoped so the
+   wiki's own stylesheet cannot leak in (and ours cannot leak out). */
+#wsg-panel {
+  all: initial;
+  position: fixed;
+  right: 14px;
+  bottom: calc(14px + env(safe-area-inset-bottom, 0px));
+  z-index: 2147483647;
+  width: min(340px, calc(100vw - 24px));
+  box-sizing: border-box;
+  display: block;
+  direction: ltr;
+  text-align: left;
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: #dce4f8;
+  background: #0c1120;
+  border: 1px solid #2c3a63;
+  border-radius: 10px;
+  box-shadow: 0 24px 60px -18px rgba(0, 0, 0, .75);
+  overflow: hidden;
+  animation: wsg-in .24s cubic-bezier(.2, .7, .2, 1);
+}
+
+#wsg-panel * { box-sizing: border-box; margin: 0; padding: 0; }
+
+@keyframes wsg-in {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: none; }
+}
+
+#wsg-panel .wsg-head {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 9px 11px;
+  border-bottom: 1px solid #1e2840;
+  font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+  font-size: 10.5px;
+  letter-spacing: .03em;
+  color: #7f8cae;
+}
+
+#wsg-panel .wsg-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #7c9cff;
+  flex: 0 0 auto;
+}
+
+#wsg-panel .wsg-title { color: #dce4f8; font-weight: 600; }
+
+#wsg-panel .wsg-count {
+  margin-left: auto;
+  color: #7f8cae;
+  white-space: nowrap;
+}
+
+#wsg-panel .wsg-close {
+  all: unset;
+  cursor: pointer;
+  color: #7f8cae;
+  font-size: 15px;
+  line-height: 1;
+  padding: 2px 4px;
+  border-radius: 4px;
+  flex: 0 0 auto;
+}
+#wsg-panel .wsg-close:hover,
+#wsg-panel .wsg-close:focus-visible { color: #dce4f8; background: #121a2c; }
+
+#wsg-panel .wsg-list { max-height: 45vh; overflow-y: auto; }
+
+#wsg-panel .wsg-item {
+  padding: 9px 11px;
+  border-bottom: 1px solid #1e2840;
+}
+#wsg-panel .wsg-item:last-child { border-bottom: none; }
+
+#wsg-panel .wsg-msg {
+  white-space: pre-wrap;
+  word-break: break-word;
+  color: #dce4f8;
+  max-height: 130px;
+  overflow: auto;
+  -webkit-user-select: text;
+  user-select: text;
+}
+
+#wsg-panel .wsg-copy {
+  all: unset;
+  display: inline-block;
+  margin-top: 6px;
+  cursor: pointer;
+  font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+  font-size: 9.5px;
+  letter-spacing: .04em;
+  color: #7f8cae;
+  border: 1px solid #1e2840;
+  border-radius: 4px;
+  padding: 2px 8px;
+}
+#wsg-panel .wsg-copy:hover,
+#wsg-panel .wsg-copy:focus-visible { color: #dce4f8; border-color: #7c9cff; }
+#wsg-panel .wsg-copy.ok { color: #3fcf9a; border-color: #3fcf9a; }
+
+#wsg-panel .wsg-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 11px;
+  border-top: 1px solid #1e2840;
+  font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+  font-size: 9.5px;
+  color: #4d5878;
+}
+
+#wsg-panel .wsg-foot a {
+  color: #7c9cff;
+  text-decoration: none;
+}
+#wsg-panel .wsg-foot a:hover { text-decoration: underline; }
+
+#wsg-panel .wsg-enc { color: #e0a94f; white-space: nowrap; }
+
+@media (prefers-color-scheme: light) {
+  #wsg-panel {
+    color: #171a2b;
+    background: #ffffff;
+    border-color: #bcc3ef;
+    box-shadow: 0 24px 60px -20px rgba(23, 26, 43, .35);
+  }
+  #wsg-panel .wsg-head,
+  #wsg-panel .wsg-item,
+  #wsg-panel .wsg-foot { border-color: #e1e5f2; }
+  #wsg-panel .wsg-title,
+  #wsg-panel .wsg-msg { color: #171a2b; }
+  #wsg-panel .wsg-head,
+  #wsg-panel .wsg-count,
+  #wsg-panel .wsg-foot { color: #545e7a; }
+  #wsg-panel .wsg-close { color: #545e7a; }
+  #wsg-panel .wsg-close:hover { color: #171a2b; background: #e9ecf6; }
+  #wsg-panel .wsg-copy { color: #545e7a; border-color: #d5dbeb; }
+  #wsg-panel .wsg-copy:hover { color: #171a2b; border-color: #4c5fd5; }
+  #wsg-panel .wsg-foot a { color: #4c5fd5; }
+  #wsg-panel .wsg-enc { color: #9a5c00; }
+}
+
+@media (max-width: 480px) {
+  #wsg-panel { right: 8px; bottom: calc(8px + env(safe-area-inset-bottom, 0px)); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  #wsg-panel { animation-duration: .001ms !important; }
+}

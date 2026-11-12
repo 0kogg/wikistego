@@ -1,0 +1,829 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>WikiStego — decode</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230c1120'/%3E%3Ccircle cx='16' cy='16' r='5' fill='%237c9cff'/%3E%3C/svg%3E">
+<style>
+:root {
+  --bg:#eef1f8; --surface:#ffffff; --surface2:#e9ecf6; --border:#d5dbeb;
+  --accent:#4c5fd5; --accent-d:#bcc3ef; --accent-text:#ffffff;
+  --ok:#14915f; --err:#c8303f; --warn:#9a5c00;
+  --text:#171a2b; --muted:#545e7a; --dim:#949db9;
+  --glow1:rgba(76,95,213,.16); --glow2:rgba(20,145,95,.10);
+  --shadow:0 24px 60px -34px rgba(23,26,43,.40);
+  --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+  --sans: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme]) {
+    --bg:#070a12; --surface:#0c1120; --surface2:#121a2c; --border:#1e2840;
+    --accent:#7c9cff; --accent-d:#2c3a63; --accent-text:#ffffff;
+    --ok:#3fcf9a; --err:#f46d8b; --warn:#e0a94f;
+    --text:#dce4f8; --muted:#7f8cae; --dim:#4d5878;
+    --glow1:rgba(124,156,255,.18); --glow2:rgba(63,207,154,.10);
+    --shadow:0 34px 80px -46px rgba(0,0,0,.95);
+  }
+}
+:root[data-theme="midnight"] {
+  --bg:#070a12; --surface:#0c1120; --surface2:#121a2c; --border:#1e2840;
+  --accent:#7c9cff; --accent-d:#2c3a63; --accent-text:#ffffff;
+  --ok:#3fcf9a; --err:#f46d8b; --warn:#e0a94f;
+  --text:#dce4f8; --muted:#7f8cae; --dim:#4d5878;
+  --glow1:rgba(124,156,255,.18); --glow2:rgba(63,207,154,.10);
+  --shadow:0 34px 80px -46px rgba(0,0,0,.95);
+}
+:root[data-theme="gotham"] {
+  --bg:#050506; --surface:#0a0a0c; --surface2:#111114; --border:#232329;
+  --accent:#d3a33c; --accent-d:#4a3a14; --accent-text:#161208;
+  --ok:#5fbf8b; --err:#d96a6a; --warn:#d3a33c;
+  --text:#e9e5db; --muted:#918c80; --dim:#5a564e;
+  --glow1:rgba(211,163,60,.14); --glow2:rgba(120,124,140,.10);
+  --shadow:0 34px 80px -46px rgba(0,0,0,.98);
+}
+
+*,*::before,*::after { box-sizing:border-box; margin:0; padding:0 }
+html { -webkit-text-size-adjust:100% }
+body {
+  background:var(--bg); color:var(--text);
+  font-family:var(--sans); font-size:13.5px; line-height:1.55;
+  min-height:100vh; display:flex; align-items:flex-start; justify-content:center;
+  padding:24px 14px calc(24px + env(safe-area-inset-bottom,0px));
+  overflow-x:hidden;
+}
+body::before, body::after {
+  content:''; position:fixed; z-index:0; border-radius:50%;
+  filter:blur(80px); pointer-events:none; will-change:transform;
+}
+body::before { width:480px;height:480px;top:-190px;left:-150px;background:var(--glow1);animation:drift1 24s ease-in-out infinite }
+body::after  { width:420px;height:420px;bottom:-200px;right:-130px;background:var(--glow2);animation:drift2 28s ease-in-out infinite }
+@keyframes drift1 { 0%,100%{transform:translate3d(0,0,0) scale(1)} 50%{transform:translate3d(50px,36px,0) scale(1.1)} }
+@keyframes drift2 { 0%,100%{transform:translate3d(0,0,0) scale(1)} 50%{transform:translate3d(-44px,-30px,0) scale(1.07)} }
+
+.shell {
+  position:relative; z-index:1; width:100%; max-width:540px;
+  background:var(--surface); border:1px solid var(--border); border-radius:10px;
+  padding:18px 18px 15px; box-shadow:var(--shadow);
+  animation:shellIn .42s cubic-bezier(.2,.7,.2,1);
+}
+@keyframes shellIn { from{opacity:0;transform:translateY(8px)} to{opacity:1;transform:none} }
+
+/* header */
+.hdr { display:flex; align-items:flex-start; justify-content:space-between; gap:10px; margin-bottom:14px }
+.hdr-name { font-family:var(--mono);font-size:16px;font-weight:600;letter-spacing:-.02em;display:flex;align-items:center;gap:9px }
+.pip { position:relative;width:7px;height:7px;border-radius:50%;background:var(--accent);flex-shrink:0 }
+.pip::after { content:'';position:absolute;inset:-5px;border-radius:50%;border:1px solid var(--accent);opacity:0;animation:ping 3s ease-out infinite }
+@keyframes ping { 0%{transform:scale(.55);opacity:.7} 70%,100%{transform:scale(1.7);opacity:0} }
+.hdr-sub { font-size:11px;color:var(--muted);margin-top:3px;padding-left:16px }
+.hdr-tools { display:flex;align-items:center;gap:6px;flex-wrap:wrap;justify-content:flex-end }
+.local {
+  display:inline-flex;align-items:center;gap:6px;white-space:nowrap;
+  font-family:var(--mono);font-size:9.5px;letter-spacing:.03em;color:var(--muted);
+  border:1px solid var(--border);border-radius:99px;padding:3px 9px;background:var(--surface2);
+}
+.local .dot { width:5px;height:5px;border-radius:50%;background:var(--ok);animation:beat 2.6s ease-in-out infinite }
+@keyframes beat { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:.4;transform:scale(.75)} }
+.theme {
+  width:auto;font-family:var(--mono);font-size:9.5px;color:var(--muted);
+  background:var(--surface2);border:1px solid var(--border);border-radius:99px;
+  padding:3px 8px;cursor:pointer;letter-spacing:.03em;
+}
+.theme:hover { color:var(--text) }
+
+/* tabs */
+.tabs { display:flex;gap:0;border-bottom:1px solid var(--border);margin-bottom:15px;overflow-x:auto;scrollbar-width:none }
+.tabs::-webkit-scrollbar { display:none }
+.tab {
+  position:relative;font-family:var(--mono);font-size:11.5px;font-weight:500;
+  color:var(--muted);padding:8px 13px;cursor:pointer;white-space:nowrap;
+  border:none;background:none;user-select:none;transition:color .18s ease
+}
+.tab::after {
+  content:'';position:absolute;left:13px;right:13px;bottom:-1px;height:2px;
+  background:var(--accent);border-radius:2px;transform:scaleX(0);transform-origin:center;
+  transition:transform .24s cubic-bezier(.2,.7,.2,1)
+}
+.tab:hover { color:var(--text) }
+.tab.on { color:var(--accent) }
+.tab.on::after { transform:scaleX(1) }
+
+/* panels */
+.panel { display:none }
+.panel.on { display:block;animation:panelIn .26s cubic-bezier(.2,.7,.2,1) }
+@keyframes panelIn { from{opacity:0;transform:translateY(6px)} to{opacity:1;transform:none} }
+
+/* fields */
+.field { margin-bottom:10px }
+label { display:block;font-family:var(--mono);font-size:10px;font-weight:500;color:var(--muted);margin-bottom:5px;letter-spacing:.03em }
+textarea,input[type=password],input[type=text],select {
+  width:100%;background:var(--surface2);border:1px solid var(--border);
+  border-radius:4px;color:var(--text);font-size:13px;line-height:1.5;
+  padding:8px 10px;outline:none;
+  transition:border-color .18s ease,box-shadow .18s ease,background .18s ease;
+  font-family:var(--sans)
+}
+textarea { resize:vertical;min-height:74px }
+textarea.mono,input[type=password],input[type=text],select { font-family:var(--mono);font-size:11.5px }
+textarea:focus,input:focus,select:focus { border-color:var(--accent);background:var(--surface);box-shadow:0 0 0 3px var(--glow1) }
+textarea::placeholder,input::placeholder { color:var(--dim) }
+
+.chk { display:flex;align-items:center;gap:7px;cursor:pointer;user-select:none;font-family:var(--mono);font-size:10.5px;color:var(--muted);transition:color .18s }
+.chk:hover { color:var(--text) }
+.chk input { width:13px;height:13px;accent-color:var(--accent);flex-shrink:0;cursor:pointer }
+
+.grid2 { display:grid;grid-template-columns:1fr 1fr;gap:8px }
+.inline { display:flex;gap:7px }
+.inline input { flex:1;min-width:0 }
+.inline .btn { white-space:nowrap }
+
+.pw { position:relative }
+.pw input { padding-right:50px }
+.eye {
+  position:absolute;right:4px;bottom:4px;font-family:var(--mono);font-size:9px;
+  letter-spacing:.04em;color:var(--dim);background:none;border:none;cursor:pointer;
+  padding:4px 6px;border-radius:3px;transition:color .15s
+}
+.eye:hover { color:var(--accent) }
+
+.counter { font-family:var(--mono);font-size:9.5px;color:var(--dim);margin-top:4px;text-align:right }
+
+/* buttons */
+.row { display:flex;gap:7px;margin-top:11px;flex-wrap:wrap }
+.btn { font-family:var(--mono);font-size:11.5px;font-weight:500;padding:8px 15px;border:none;border-radius:4px;cursor:pointer;transition:transform .12s ease,box-shadow .2s ease,opacity .15s,color .15s,border-color .15s }
+.btn-p { background:var(--accent);color:var(--accent-text) }
+.btn-p:hover { opacity:.9;transform:translateY(-1px);box-shadow:0 7px 18px -10px var(--accent) }
+.btn-s { background:var(--surface2);color:var(--muted);border:1px solid var(--border) }
+.btn-s:hover { color:var(--text);border-color:var(--dim) }
+.btn:active { transform:translateY(0) scale(.98) }
+.btn:disabled { opacity:.45;cursor:not-allowed }
+.btn-cp { font-family:var(--mono);font-size:10.5px;font-weight:500;padding:5px 11px;background:var(--surface2);border:1px solid var(--border);border-radius:4px;color:var(--muted);cursor:pointer;position:relative;z-index:1;white-space:nowrap;transition:color .15s,border-color .15s,transform .12s }
+.btn-cp:hover { color:var(--text);border-color:var(--accent) }
+.btn-cp.ok { color:var(--ok);border-color:var(--ok);animation:pop .3s ease }
+@keyframes pop { 0%{transform:scale(.94)} 60%{transform:scale(1.04)} 100%{transform:scale(1)} }
+
+/* output */
+.out { margin-top:14px;display:none }
+.out.on { display:block;animation:panelIn .24s ease }
+.out-lbl { font-family:var(--mono);font-size:10px;color:var(--muted);margin-bottom:7px;letter-spacing:.02em }
+.pbox { background:var(--surface2);border:1px dashed var(--border);border-radius:4px;padding:11px 13px;display:flex;align-items:center;justify-content:space-between;gap:10px;position:relative;overflow:hidden }
+.pbox::before { content:'';position:absolute;inset:0;background:linear-gradient(90deg,transparent,var(--accent-d),transparent);opacity:.28;animation:shim 3.4s ease-in-out infinite;pointer-events:none }
+@keyframes shim { 0%,100%{transform:translateX(-110%)} 50%{transform:translateX(110%)} }
+.pinfo { font-family:var(--mono);font-size:11px;color:var(--muted);position:relative;z-index:1 }
+.pinfo .n { color:var(--accent);font-weight:600 }
+
+.note { font-family:var(--mono);font-size:10px;color:var(--dim);margin-top:9px;padding-left:10px;border-left:2px solid var(--border);line-height:1.75 }
+.note em { color:var(--muted);font-style:normal }
+.hint { font-family:var(--mono);font-size:10px;color:var(--dim);margin-top:5px;line-height:1.65 }
+.hint code { color:var(--muted) }
+
+.revealed { background:var(--surface2);border:1px solid var(--ok);border-radius:4px;padding:11px 13px;font-family:var(--mono);font-size:12.5px;color:var(--text);word-break:break-word;white-space:pre-wrap;line-height:1.55;animation:revealIn .34s cubic-bezier(.2,.7,.2,1) }
+@keyframes revealIn { from{opacity:0;transform:scale(.97);box-shadow:0 0 0 6px var(--glow2)} to{opacity:1;transform:none;box-shadow:0 0 0 0 transparent} }
+.revealed::before { content:'→  ';color:var(--ok);font-weight:600 }
+
+.errmsg { font-family:var(--mono);font-size:11px;color:var(--err);padding:8px 10px;background:var(--surface2);border:1px solid var(--err);border-radius:4px;margin-top:10px;line-height:1.6;animation:panelIn .2s ease }
+.errmsg::before { content:'✕  ' }
+.banner { font-family:var(--mono);font-size:10.5px;line-height:1.6;color:var(--warn);border:1px solid var(--warn);border-radius:4px;padding:8px 10px;margin-bottom:12px;display:none }
+.banner.on { display:block;animation:panelIn .2s ease }
+
+.badge { font-family:var(--mono);font-size:9px;padding:2px 6px;border-radius:99px;border:1px solid var(--border);color:var(--muted);text-transform:uppercase;letter-spacing:.07em;white-space:nowrap }
+.badge.enc { color:var(--accent);border-color:var(--accent-d);background:var(--surface2) }
+.badge.plain { color:var(--ok);border-color:var(--ok) }
+.badge.leg { color:var(--warn);border-color:var(--warn) }
+
+.item { border:1px solid var(--border);border-radius:5px;background:var(--surface2);padding:10px 12px;margin-bottom:8px;transition:border-color .18s ease,transform .18s ease;animation:panelIn .26s ease both }
+.item:hover { border-color:var(--dim);transform:translateY(-1px) }
+.item-head { display:flex;align-items:center;gap:7px;flex-wrap:wrap;margin-bottom:7px }
+.meta { font-family:var(--mono);font-size:9.5px;color:var(--dim) }
+.item-err { font-family:var(--mono);font-size:11px;color:var(--err);line-height:1.6 }
+.item-actions { display:flex;justify-content:flex-end;margin-top:7px }
+
+.slot { border:1px solid var(--border);border-left:3px solid var(--accent);background:var(--surface2);padding:9px 11px;margin-bottom:7px;border-radius:4px;animation:slotIn .3s cubic-bezier(.2,.7,.2,1) both;transition:border-color .18s ease,transform .18s ease }
+.slot:hover { border-color:var(--dim);transform:translateY(-1px) }
+@keyframes slotIn { from{opacity:0;transform:translateX(-6px)} to{opacity:1;transform:none} }
+.snip { font-family:var(--mono);font-size:11px;color:var(--text);word-break:break-word;white-space:pre-wrap;line-height:1.65 }
+.zwmark { color:var(--accent);background:var(--surface);padding:0 2px;font-weight:600;border-radius:2px }
+.slot .kv { font-family:var(--mono);font-size:9.5px;color:var(--dim);margin-top:5px }
+
+details.manual { margin-top:9px }
+details.manual summary { font-family:var(--mono);font-size:10px;color:var(--muted);cursor:pointer;transition:color .15s }
+details.manual summary:hover { color:var(--text) }
+details.manual textarea { margin-top:7px;min-height:64px }
+
+/* faq */
+details.faq { border-bottom:1px solid var(--border);padding:10px 0 }
+details.faq summary { cursor:pointer;list-style:none;user-select:none;display:flex;justify-content:space-between;align-items:center;gap:12px;font-family:var(--mono);font-size:11px;color:var(--text);transition:color .15s }
+details.faq summary::-webkit-details-marker { display:none }
+details.faq summary::after { content:'+';color:var(--dim);font-size:13px }
+details.faq[open] summary::after { content:'−' }
+details.faq summary:hover { color:var(--accent) }
+details.faq .a { font-size:12px;color:var(--muted);padding-top:8px;line-height:1.75;animation:panelIn .22s ease }
+details.faq .a p + p { margin-top:7px }
+.alph { width:100%;border-collapse:collapse;font-family:var(--mono);font-size:10.5px;margin:8px 0 4px }
+.alph td { padding:4px 7px;border-bottom:1px solid var(--border);color:var(--muted);vertical-align:top }
+.alph tr:last-child td { border-bottom:none }
+.alph td:first-child { color:var(--text);white-space:nowrap }
+.alph code { color:var(--accent) }
+.legal h3 { font-family:var(--mono);font-size:11px;color:var(--text);margin:18px 0 7px;letter-spacing:.02em }
+.legal p { font-size:12px;color:var(--muted);line-height:1.75;margin-bottom:7px }
+.legal .stamp { font-family:var(--mono);font-size:9.5px;color:var(--dim);margin-top:3px }
+
+/* footer + toast */
+.foot { margin-top:16px;padding-top:11px;border-top:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;font-family:var(--mono);font-size:9.5px;color:var(--dim);line-height:1.6 }
+.foot code { color:var(--muted) }
+.foot a { color:var(--muted);text-decoration:none;border-bottom:1px dotted var(--dim) }
+.foot a:hover { color:var(--accent);border-bottom-color:var(--accent) }
+.foot .foot-right { display:inline-flex;align-items:center;gap:8px;flex-wrap:wrap }
+.foot .gh { display:inline-flex;align-items:center;gap:4px;padding:2px 8px;border:1px solid var(--border);border-radius:99px;color:var(--muted);transition:color .15s,border-color .15s,background .15s }
+.foot .gh:hover { color:var(--accent);border-color:var(--accent);background:var(--surface2) }
+.toast { position:fixed;left:50%;bottom:22px;transform:translate(-50%,14px);opacity:0;pointer-events:none;background:var(--surface);border:1px solid var(--border);color:var(--text);font-family:var(--mono);font-size:10.5px;padding:8px 13px;border-radius:99px;box-shadow:0 10px 30px -12px rgba(0,0,0,.5);transition:opacity .2s,transform .2s;z-index:50 }
+.toast.on { opacity:1;transform:translate(-50%,0) }
+
+.drop-hover { outline:2px dashed var(--accent);outline-offset:-4px;background:var(--surface) }
+
+@media (max-width:560px) {
+  body { padding:0 }
+  .shell { max-width:100%;border-radius:0;border-left:none;border-right:none;padding:15px 13px calc(14px + env(safe-area-inset-bottom,0px)) }
+  .hdr { flex-direction:column;gap:9px }
+  .hdr-tools { justify-content:flex-start }
+  .tabs { justify-content:space-between }
+  .tab { flex:1;text-align:center;padding:9px 3px }
+  textarea,input[type=password],input[type=text],select { font-size:16px }
+  .row .btn { flex:1 }
+  .grid2 { grid-template-columns:1fr }
+  .foot { font-size:9px }
+}
+@media (prefers-reduced-motion: reduce) {
+  *,*::before,*::after { animation-duration:.001ms!important;animation-iteration-count:1!important;transition-duration:.001ms!important;scroll-behavior:auto!important }
+}
+
+.tag { font-family:var(--mono);font-size:8.5px;color:var(--muted);border:1px solid var(--border);
+  border-radius:99px;padding:1px 6px;letter-spacing:.06em;text-transform:uppercase;margin-left:3px }
+a { color:var(--accent);text-decoration:none;font-family:var(--mono) }
+a:hover { text-decoration:underline }
+</style>
+</head>
+<body>
+<div class="shell">
+  <div class="hdr">
+    <div>
+      <div class="hdr-name"><div class="pip"></div>wikistego<span class="tag">decode</span></div>
+      <div class="hdr-sub">decoder only — this file cannot encode</div>
+    </div>
+    <div class="hdr-tools">
+      <span class="local"><span class="dot"></span>local · no tracking</span>
+      <select id="theme" class="theme" onchange="WS.setTheme(this.value)" title="theme">
+        <option value="auto">auto</option>
+        <option value="light">light</option>
+        <option value="midnight">midnight</option>
+        <option value="gotham">gotham</option>
+      </select>
+    </div>
+  </div>
+
+  <div id="crypto-warn" class="banner"></div>
+
+  <div class="field">
+    <label>wikitext source</label>
+    <textarea id="d-wiki" class="mono" placeholder="paste the page source — not the rendered page" spellcheck="false" style="min-height:150px"></textarea>
+    <div class="hint">or drop a .wiki / .txt file here</div>
+  </div>
+
+  <div class="field">
+    <label>import a page</label>
+    <div class="inline">
+      <input id="d-page" type="text" placeholder="https://en.wikipedia.org/wiki/Page">
+      <button class="btn btn-s" onclick="WS.importPage()">import</button>
+    </div>
+    <div class="hint" id="d-import-note">fetches that page's wikitext straight from the wiki</div>
+  </div>
+
+  <div class="field pw">
+    <label>password — only for encrypted</label>
+    <input id="d-pw" type="password" placeholder="leave empty for plain">
+    <button type="button" class="eye" onclick="WS.togglePw('d-pw',this)">show</button>
+  </div>
+
+  <div class="row">
+    <button class="btn btn-p" onclick="WS.doDecode()">decode →</button>
+    <button class="btn btn-s" onclick="WS.clrD()">clear</button>
+  </div>
+
+  <div id="d-err" class="errmsg" style="display:none"></div>
+  <div id="d-out" class="out"></div>
+
+  <div class="foot">
+    <span><code>U+2060</code> · WSG2 · crc32 · AES-256-GCM</span>
+    <span><a href="wikistego.html">full tool →</a> ·
+      <a href="https://github.com/0kogg/wikistego" target="_blank" rel="noopener noreferrer">github ↗</a></span>
+  </div>
+</div>
+
+<div id="toast" class="toast" role="status"></div>
+
+<script>
+(function () {
+  'use strict';
+
+  /* ─────────────────────────── constants ─────────────────────────── */
+  var ZW0 = '\u200b';   // zero width space      → bit 0
+  var ZW1 = '\u200c';   // zero width non-joiner → bit 1
+  var ZWJ = '\u200d';   // zero width joiner
+  var MARK = '\u2060';  // word joiner — frame delimiter
+  var BOM  = '\ufeff';  // zero width no-break space
+
+  var ALPHABETS = [
+    { id: 0, chars: [ZW0, ZW1], label: 'U+200B/U+200C' },
+    { id: 1, chars: [ZW0, ZWJ], label: 'U+200B/U+200D' },
+    { id: 2, chars: [ZW1, ZWJ], label: 'U+200C/U+200D' }
+  ];
+  var ZW_SET = new Set([ZW0, ZW1, ZWJ, MARK, BOM]);
+
+  var MAGIC_BYTES = [0x57, 0x53, 0x47, 0x32];              // "WSG2"
+  var MAGIC_BITS = MAGIC_BYTES.map(function (b) {
+    return b.toString(2).padStart(8, '0');
+  }).join('');
+
+  var PBKDF2_ITER = 600000;
+  var F_ENC = 0x01, F_ALPH = 0x0e, F_WHITEN = 0x10;
+
+  var te = new TextEncoder();
+  var tdFatal = new TextDecoder('utf-8', { fatal: true });
+
+  /* ─────────────────────────── crc32 ─────────────────────────── */
+  var CRC_TABLE = (function () {
+    var t = new Uint32Array(256), n, k, c;
+    for (n = 0; n < 256; n++) {
+      c = n;
+      for (k = 0; k < 8; k++) c = (c & 1) ? (0xEDB88320 ^ (c >>> 1)) : (c >>> 1);
+      t[n] = c >>> 0;
+    }
+    return t;
+  })();
+
+  function crc32(bytes) {
+    var c = 0xFFFFFFFF, i;
+    for (i = 0; i < bytes.length; i++) {
+      c = (c >>> 8) ^ CRC_TABLE[(c ^ bytes[i]) & 0xff];
+    }
+    return (c ^ 0xFFFFFFFF) >>> 0;
+  }
+
+  /* ─────────────────────────── bit helpers ─────────────────────────── */
+  function bitsToByte(bits, pos) {
+    var v = 0, i;
+    for (i = 0; i < 8; i++) v = (v << 1) | (bits.charCodeAt(pos + i) === 49 ? 1 : 0);
+    return v;
+  }
+  function bitsToU32(bits, pos) {
+    var v = 0, i;
+    for (i = 0; i < 32; i++) v = ((v << 1) | (bits.charCodeAt(pos + i) === 49 ? 1 : 0)) >>> 0;
+    return v;
+  }
+  function hex(bytes) {
+    var s = '', i;
+    for (i = 0; i < bytes.length; i++) s += (bytes[i] < 16 ? '0' : '') + bytes[i].toString(16);
+    return s;
+  }
+
+  /* ─────────────────────────── frame ───────────────────────────
+     U+2060 | "WSG2" | flags | len(2B BE) | payload | crc32(4B BE) | U+2060
+     flags: bit0 encrypted, bits1-3 alphabet id, bit4 whitened          */
+  function buildFrame(payload, flags) {
+    if (payload.length > 0xffff) throw new Error('payload exceeds 65535 bytes');
+    var total = 7 + payload.length + 4;
+    var out = new Uint8Array(total);
+    out[0] = MAGIC_BYTES[0]; out[1] = MAGIC_BYTES[1];
+    out[2] = MAGIC_BYTES[2]; out[3] = MAGIC_BYTES[3];
+    out[4] = flags & 0xff;
+    out[5] = (payload.length >>> 8) & 0xff;
+    out[6] = payload.length & 0xff;
+    out.set(payload, 7);
+    var c = crc32(out.subarray(0, 7 + payload.length));
+    var o = 7 + payload.length;
+    out[o]     = (c >>> 24) & 0xff;
+    out[o + 1] = (c >>> 16) & 0xff;
+    out[o + 2] = (c >>> 8) & 0xff;
+    out[o + 3] = c & 0xff;
+    return out;
+  }
+
+  function frameToZwc(bytes, al) {
+    var s = MARK, i, k, b;
+    for (i = 0; i < bytes.length; i++) {
+      b = bytes[i];
+      for (k = 7; k >= 0; k--) s += ((b >> k) & 1) ? al.chars[1] : al.chars[0];
+    }
+    return s + MARK;
+  }
+
+  function symbolsToBits(str, al) {
+    var a = al.chars[0], b = al.chars[1], out = [], i, c;
+    for (i = 0; i < str.length; i++) {
+      c = str[i];
+      if (c === a) out.push('0');
+      else if (c === b) out.push('1');
+    }
+    return out.join('');
+  }
+
+  function tryDecodeAt(bits, pos) {
+    if (bits.length - pos < 32 + 8 + 16 + 32) return null;
+    var flags = bitsToByte(bits, pos + 32);
+    var len = (bitsToByte(bits, pos + 40) << 8) | bitsToByte(bits, pos + 48);
+    var start = pos + 56;
+    var end = start + len * 8;
+    if (end + 32 > bits.length) return null;
+
+    var payload = new Uint8Array(len), i;
+    for (i = 0; i < len; i++) payload[i] = bitsToByte(bits, start + i * 8);
+
+    var frame = new Uint8Array(7 + len);
+    frame[0] = MAGIC_BYTES[0]; frame[1] = MAGIC_BYTES[1];
+    frame[2] = MAGIC_BYTES[2]; frame[3] = MAGIC_BYTES[3];
+    frame[4] = flags;
+    frame[5] = (len >>> 8) & 0xff;
+    frame[6] = len & 0xff;
+    frame.set(payload, 7);
+
+    if (crc32(frame) !== bitsToU32(bits, end)) return null;
+
+    return { payloadBytes: payload, flags: flags, len: len, bitOffset: pos };
+  }
+
+  /* legacy v1: U+200D | bits | U+200D, encrypted only, no frame */
+  function decodeV1(text) {
+    var i = text.indexOf(ZWJ);
+    if (i < 0) return null;
+    var j = text.indexOf(ZWJ, i + 1);
+    if (j < 0) return null;
+    var span = text.slice(i + 1, j);
+    if (!span) return null;
+
+    var bits = '', k, c;
+    for (k = 0; k < span.length; k++) {
+      c = span[k];
+      if (c === ZW0) bits += '0';
+      else if (c === ZW1) bits += '1';
+      else return null;
+    }
+    if (bits.length < 352) return null;   // 44 bytes = salt+iv+tag minimum
+
+    var n = bits.length - (bits.length % 8);
+    var payload = new Uint8Array(n / 8);
+    for (k = 0; k < payload.length; k++) {
+      payload[k] = parseInt(bits.slice(k * 8, k * 8 + 8), 2);
+    }
+    return {
+      payloadBytes: payload, flags: F_ENC, len: payload.length,
+      legacy: true, alphabet: 0, position: i + 1, bitOffset: 0
+    };
+  }
+
+  function keyOf(r) { return hex(r.payloadBytes) + '/' + r.flags; }
+
+  function decodeText(text) {
+    var out = [], corrupt = 0;
+    var markerKeys = new Set(), markerBytes = new Set(), scanKeys = new Set();
+
+    /* stage 1: payloads still wrapped in U+2060 delimiters */
+    var marks = [], i;
+    for (i = 0; i < text.length; i++) if (text[i] === MARK) marks.push(i);
+
+    for (i = 0; i + 1 < marks.length; i++) {
+      var span = text.slice(marks[i] + 1, marks[i + 1]);
+      if (!span) continue;
+
+      for (var a = 0; a < ALPHABETS.length; a++) {
+        var al = ALPHABETS[a];
+        var bits = symbolsToBits(span, al);
+        if (bits.length < 56) continue;
+
+        var p = bits.indexOf(MAGIC_BITS);
+        while (p >= 0) {
+          var r = tryDecodeAt(bits, p);
+          if (r) {
+            r.alphabet = al.id; r.position = marks[i] + 1; r.bitOffset = p;
+            var bk = keyOf(r), mk = bk + '@' + marks[i];
+            if (!markerKeys.has(mk)) {
+              markerKeys.add(mk); markerBytes.add(bk); out.push(r);
+            }
+          } else {
+            corrupt++;
+          }
+          p = bits.indexOf(MAGIC_BITS, p + 1);
+        }
+      }
+    }
+
+    /* stage 2: delimiters may have been trimmed — scan the raw stream */
+    for (var b = 0; b < ALPHABETS.length; b++) {
+      var al2 = ALPHABETS[b];
+      var bits2 = symbolsToBits(text, al2);
+      if (bits2.length < 56) continue;
+
+      var q = bits2.indexOf(MAGIC_BITS);
+      while (q >= 0) {
+        var r2 = tryDecodeAt(bits2, q);
+        if (r2) {
+          var k2 = keyOf(r2);
+          if (!markerBytes.has(k2) && !scanKeys.has(k2)) {
+            r2.alphabet = al2.id; r2.position = null; r2.bitOffset = q;
+            scanKeys.add(k2); out.push(r2);
+          }
+        }
+        q = bits2.indexOf(MAGIC_BITS, q + 1);
+      }
+    }
+
+    if (!out.length) {
+      var v1 = decodeV1(text);
+      if (v1) out.push(v1);
+    }
+    return { items: out, corrupt: corrupt };
+  }
+
+  /* ─────────────────────────── crypto ─────────────────────────── */
+  function requireCrypto() {
+    if (!(typeof crypto !== 'undefined' && crypto && crypto.subtle)) {
+      throw new Error('WebCrypto unavailable — open this file directly or serve it over https');
+    }
+  }
+
+  async function deriveKey(pw, salt) {
+    requireCrypto();
+    var raw = await crypto.subtle.importKey(
+      'raw', te.encode(pw), 'PBKDF2', false, ['deriveKey']
+    );
+    return crypto.subtle.deriveKey(
+      { name: 'PBKDF2', salt: salt, iterations: PBKDF2_ITER, hash: 'SHA-256' },
+      raw, { name: 'AES-GCM', length: 256 }, false, ['encrypt', 'decrypt']
+    );
+  }
+
+  async function aesEnc(msgBytes, pw) {
+    var salt = crypto.getRandomValues(new Uint8Array(16));
+    var iv = crypto.getRandomValues(new Uint8Array(12));
+    var key = await deriveKey(pw, salt);
+    var ct = new Uint8Array(await crypto.subtle.encrypt({ name: 'AES-GCM', iv: iv }, key, msgBytes));
+    var out = new Uint8Array(28 + ct.length);
+    out.set(salt, 0); out.set(iv, 16); out.set(ct, 28);
+    return out;
+  }
+
+  async function aesDec(data, pw) {
+    if (data.length < 44) throw new Error('ciphertext too short');
+    var key = await deriveKey(pw, data.slice(0, 16));
+    var pt = await crypto.subtle.decrypt(
+      { name: 'AES-GCM', iv: data.slice(16, 28) }, key, data.slice(28)
+    );
+    return new Uint8Array(pt);
+  }
+
+  /* deterministic whitening — cosmetic only, no secrecy */
+  function whitenBytes(bytes) {
+    var x = 0x9e3779b9 >>> 0;
+    var out = new Uint8Array(bytes.length), i;
+    for (i = 0; i < bytes.length; i++) {
+      x ^= (x << 13) >>> 0; x >>>= 0;
+      x ^= x >>> 17;
+      x ^= (x << 5) >>> 0;  x >>>= 0;
+      out[i] = bytes[i] ^ (x & 0xff);
+    }
+    return out;
+  }
+
+  async function decryptItem(item, pw) {
+    if (item.flags & F_ENC) {
+      if (!pw) {
+        var e = new Error('password required');
+        e.code = 'nopw';
+        throw e;
+      }
+      return tdFatal.decode(await aesDec(item.payloadBytes, pw));
+    }
+    var b = item.payloadBytes;
+    if (item.flags & F_WHITEN) b = whitenBytes(b);
+    return tdFatal.decode(b);
+  }
+
+
+  /* ─────────────────────────── decode ui ─────────────────────────── */
+  var toastTimer = null;
+
+  function $(id) { return document.getElementById(id); }
+  function esc(s) {
+    return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  }
+  function showErr(id, msg) { var e = $(id); e.textContent = msg; e.style.display = 'block'; }
+  function hideErr(id) { $(id).style.display = 'none'; }
+
+  function toast(msg) {
+    var t = $('toast');
+    if (!t) return;
+    t.textContent = msg;
+    t.classList.add('on');
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(function () { t.classList.remove('on'); }, 1800);
+  }
+
+  function setTheme(v) {
+    if (!v || v === 'auto') document.documentElement.removeAttribute('data-theme');
+    else document.documentElement.setAttribute('data-theme', v);
+  }
+
+  function togglePw(id, btn) {
+    var el = $(id);
+    var show = el.type === 'password';
+    el.type = show ? 'text' : 'password';
+    btn.textContent = show ? 'hide' : 'show';
+  }
+
+  async function copyText(s) {
+    try { await navigator.clipboard.writeText(s); return true; } catch (e) { /* fall through */ }
+    var ta = document.createElement('textarea');
+    ta.value = s;
+    ta.style.position = 'fixed';
+    ta.style.opacity = '0';
+    document.body.appendChild(ta);
+    ta.focus(); ta.select();
+    var ok = false;
+    try { ok = document.execCommand('copy'); } catch (e2) { /* ignore */ }
+    document.body.removeChild(ta);
+    return ok;
+  }
+
+  function parsePageUrl(raw) {
+    var m = raw.match(/^https?:\/\/([^\/]+)\/wiki\/(.+?)(?:[?#].*)?$/);
+    if (m) return { endpoint: 'https://' + m[1] + '/w/api.php', title: decodeURIComponent(m[2]).replace(/_/g, ' ') };
+    m = raw.match(/^https?:\/\/([^\/]+)\/w\/index\.php\?(?:.*&)?title=([^&#]+)/);
+    if (m) return { endpoint: 'https://' + m[1] + '/w/api.php', title: decodeURIComponent(m[2]).replace(/_/g, ' ') };
+    m = raw.match(/^https?:\/\/([^\/]+)\/api\.php\?(?:.*&)?page=([^&#]+)/);
+    if (m) return { endpoint: 'https://' + m[1] + '/api.php', title: decodeURIComponent(m[2]) };
+    return null;
+  }
+
+  async function importPage() {
+    hideErr('d-err');
+    var note = $('d-import-note');
+    var raw = $('d-page').value.trim();
+    if (!raw) return showErr('d-err', 'paste a wiki page URL');
+
+    var target = parsePageUrl(raw);
+    if (!target) return showErr('d-err', 'need a full page URL, e.g. https://en.wikipedia.org/wiki/Example');
+
+    note.textContent = 'importing…';
+    var url = target.endpoint + '?action=parse&page=' + encodeURIComponent(target.title) +
+      '&prop=wikitext&format=json&formatversion=2&origin=*';
+
+    try {
+      var r = await fetch(url, { credentials: 'omit' });
+      if (!r.ok) throw new Error('HTTP ' + r.status);
+      var data = await r.json();
+      if (data.error) throw new Error(data.error.info || data.error.code);
+      var w = data.parse && data.parse.wikitext;
+      if (w && typeof w === 'object') w = w['*'];
+      if (typeof w !== 'string') throw new Error('no wikitext in response');
+      $('d-wiki').value = w;
+      note.textContent = 'imported "' + target.title + '" · ' + w.length + ' chars';
+      toast('page imported');
+    } catch (e) {
+      note.textContent = 'fetches that page\'s wikitext straight from the wiki';
+      showErr('d-err', 'import failed: ' + e.message +
+        ' — if it is CORS, open the page\'s ?action=raw and paste it');
+    }
+  }
+
+  function wireDrop(id) {
+    var el = $(id);
+    if (!el) return;
+    ['dragenter', 'dragover'].forEach(function (ev) {
+      el.addEventListener(ev, function (e) { e.preventDefault(); el.classList.add('drop-hover'); });
+    });
+    ['dragleave', 'drop'].forEach(function (ev) {
+      el.addEventListener(ev, function (e) { e.preventDefault(); el.classList.remove('drop-hover'); });
+    });
+    el.addEventListener('drop', function (e) {
+      var f = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
+      if (!f) return;
+      var rd = new FileReader();
+      rd.onload = function () { el.value = String(rd.result); toast('loaded ' + f.name); };
+      rd.readAsText(f);
+    });
+  }
+
+  async function doDecode() {
+    hideErr('d-err');
+    var out = $('d-out');
+    out.innerHTML = ''; out.classList.remove('on');
+
+    var text = $('d-wiki').value;
+    var pw = $('d-pw').value;
+    if (!text) return showErr('d-err', 'paste the wikitext source first');
+
+    var res = decodeText(text);
+    if (!res.items.length) {
+      if (res.corrupt) return showErr('d-err', 'a frame was found but its checksum failed — the payload was altered');
+      return showErr('d-err', 'no hidden payload found');
+    }
+
+    out.classList.add('on');
+    out.innerHTML = '<div class="out-lbl">' + res.items.length +
+      ' payload' + (res.items.length > 1 ? 's' : '') + ' found</div>';
+
+    for (var i = 0; i < res.items.length; i++) {
+      var it = res.items[i];
+      var card = document.createElement('div');
+      card.className = 'item';
+
+      var kind, cls;
+      if (it.legacy) { kind = 'legacy v1'; cls = 'leg'; }
+      else if (it.flags & F_ENC) { kind = 'encrypted'; cls = 'enc'; }
+      else { kind = 'plain'; cls = 'plain'; }
+
+      var meta = 'alphabet ' + (ALPHABETS[it.alphabet] ? ALPHABETS[it.alphabet].label : '?') +
+        ' · ' + (it.position != null ? 'at char ' + it.position : 'bit offset ' + it.bitOffset) +
+        ' · ' + it.payloadBytes.length + ' bytes';
+
+      var head = document.createElement('div');
+      head.className = 'item-head';
+      head.innerHTML = '<span class="badge ' + cls + '">' + kind + '</span>' +
+        '<span class="meta">' + esc(meta) + '</span>';
+      card.appendChild(head);
+
+      var body = document.createElement('div');
+      try {
+        if ((it.flags & F_ENC) && !pw) {
+          body.className = 'item-err';
+          body.textContent = 'encrypted — enter the password';
+        } else {
+          body.className = 'revealed';
+          body.textContent = await decryptItem(it, pw);
+        }
+      } catch (e) {
+        body.className = 'item-err';
+        if (e.code === 'nopw') body.textContent = 'encrypted — enter the password';
+        else if (it.flags & F_ENC) body.textContent = 'could not decrypt — wrong password or altered ciphertext';
+        else body.textContent = 'not valid UTF-8 (' + e.message + ')';
+      }
+
+      card.appendChild(body);
+
+      if (body.className === 'revealed') {
+        var actions = document.createElement('div');
+        actions.className = 'item-actions';
+        var cp = document.createElement('button');
+        cp.className = 'btn-cp';
+        cp.textContent = 'copy';
+        (function (txt) {
+          cp.addEventListener('click', async function () {
+            var ok = await copyText(txt);
+            cp.textContent = ok ? 'copied ✓' : 'copy failed';
+            cp.classList.toggle('ok', ok);
+            if (ok) setTimeout(function () { cp.textContent = 'copy'; cp.classList.remove('ok'); }, 1600);
+          });
+        })(body.textContent);
+        actions.appendChild(cp);
+        card.appendChild(actions);
+      }
+
+      out.appendChild(card);
+    }
+  }
+
+  function clrD() {
+    $('d-wiki').value = ''; $('d-pw').value = ''; $('d-page').value = '';
+    $('d-out').innerHTML = ''; $('d-out').classList.remove('on');
+    $('d-import-note').textContent = 'fetches that page\'s wikitext straight from the wiki';
+    hideErr('d-err');
+  }
+
+  function checkCrypto() {
+    var b = $('crypto-warn');
+    if (typeof crypto === 'undefined' || !crypto.subtle) {
+      b.textContent = 'WebCrypto is unavailable here. Encrypted payloads need it — open this file ' +
+        'directly (file://) or serve it over https.';
+      b.classList.add('on');
+    }
+  }
+
+  window.WS = { setTheme: setTheme, togglePw: togglePw, doDecode: doDecode, importPage: importPage, clrD: clrD };
+  globalThis.__stego = {
+    decodeText: decodeText, decryptItem: decryptItem, parsePageUrl: parsePageUrl,
+    ALPHABETS: ALPHABETS, F_ENC: F_ENC
+  };
+
+  if (typeof document !== 'undefined' && document.getElementById) {
+    checkCrypto();
+    wireDrop('d-wiki');
+    $('theme').value = document.documentElement.getAttribute('data-theme') || 'auto';
+    document.addEventListener('keydown', function (e) {
+      if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') doDecode();
+    });
+    $('d-wiki').focus();
+  }
+})();
+</script>
+</body>
+</html>
